@@ -1,6 +1,6 @@
 /* Pizza Stack - configuration.
  * Everything a publisher needs to change lives here (ad ids, server URL, store links).
- * Defaults are SAFE: Google's public AdMob TEST ids, no server (offline-only leaderboard), no store links. */
+ * Defaults are SAFE: ad network test mode with no keys, no server (offline-only leaderboard), no store links. */
 window.PT = window.PT || {};
 window.PT.config = {
   studio: 'Pizza Technologies',
@@ -13,13 +13,19 @@ window.PT.config = {
   apiBase: '',
 
   ads: {
-    /* true  = Google test ads (safe while developing; earns nothing).
-     * false = real ads. Switch only after you replaced the ids below with Pizza Technologies' own. */
+    /* Android ads run through Unity LevelPlay (free to join; it can also mediate AdMob, AppLovin, Meta... later).
+     * Create a free account at https://unity.com/products/unity-levelplay , add the app, enable the "Unity Ads" network, create a
+     * Rewarded and an Interstitial ad unit, then paste the three values below. While appKey is '' the game still works:
+     * "watch to earn" falls back to the clearly-labelled sponsor card (nothing is earned). */
+    provider: 'levelplay',
+    /* true  = LevelPlay test mode (safe while developing, no revenue). false = real ads. */
     testMode: true,
-    admob: {
-      /* Google sample ad-unit ids (public). Replace with your own from admob.google.com */
-      rewarded: 'ca-app-pub-3940256099942544/5224354917',
-      interstitial: 'ca-app-pub-3940256099942544/1033173712'
+    levelplay: {
+      appKey: '',                 // LevelPlay dashboard -> your app -> App key
+      rewardedAdUnitId: '',       // Ad Units -> Rewarded -> ad unit id
+      interstitialAdUnitId: '',   // Ad Units -> Interstitial -> ad unit id
+      privacyPolicyUrl: '',       // PUBLIC https URL of your hosted privacy policy (shown in the consent dialog)
+      loadWaitMs: 4000            // how long "watch ad" waits for a video to load before giving up
     },
     /* Show a full-screen ad after every Nth finished run (never before `firstAfterGames`). */
     interstitialEveryNGames: 4,
@@ -28,7 +34,7 @@ window.PT.config = {
      * Shown in the empty side gutters of wide screens. Leave '' to disable. */
     adsenseClient: '',
     adsenseSlots: { left: '', right: '' },
-    /* House ad used for "watch to earn" on web/PC when no network is available. */
+    /* Sponsor-card countdown used for "watch to earn" on web/PC (and on Android until LevelPlay is configured). */
     houseAdSeconds: 5
   },
 

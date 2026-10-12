@@ -67,12 +67,12 @@ Optional line to add under "PLAY ANYWHERE" ONLY once the leaderboard server is d
 
 **Content rating:** no violence, no sexual content, no gambling, no user-generated content, no chat. Players choose a display name that appears on the leaderboard (only when the score server is on). Expect an "Everyone / 3+" style rating. Ads are shown.
 
-**Ads:** yes, this app contains ads (Google AdMob; interstitials between runs and optional rewarded videos).
+**Ads:** yes, this app contains ads (Unity LevelPlay / Unity Ads; interstitials between runs and optional rewarded videos).
 
 **In-app purchases:** none in the Android build today (the web/PC purchase links are not part of the app store build). Update this when you add Play Billing or Samsung IAP.
 
 **Data collected (draft for the Data Safety style form):**
-- Device or other IDs: advertising ID, collected by AdMob for ads and measurement.
+- Device or other IDs: advertising ID, collected by the ad network (Unity LevelPlay / Unity Ads) for ads and measurement. Also approximate location from IP and device/diagnostic info; confirm the exact list against Unity's current disclosure guidance [CONFIRM].
 - App activity: gameplay scores and a random player ID, sent only when online and only if you deploy the score server.
 - User-chosen display name (optional, shown on the leaderboard).
 - No location, contacts, photos, microphone or camera. No account or login.
@@ -81,5 +81,5 @@ Have a lawyer review `www/privacy.html` and host it at a public URL before submi
 
 ## 4. Placeholders to replace [CONFIRM]
 - Support email `support@pizzatechnologies.com` and website `https://pizzatechnologies.com` are placeholders in `www/js/config.js` and `www/privacy.html`; make sure you control them.
-- AdMob test IDs must become your real IDs before a release build (see README).
+- LevelPlay App Key and ad unit IDs must be added in `www/js/config.js` before the release build (see README).
 - Developer / company name exactly as registered with the store.

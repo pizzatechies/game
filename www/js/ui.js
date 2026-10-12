@@ -287,6 +287,7 @@
     body.appendChild(mk('div', 'note', 'LEADERBOARD NAME'));
     const inp = mk('input', 'txt'); inp.maxLength = 16; inp.value = st.name; inp.addEventListener('change', () => { const v = inp.value.replace(/[<>]/g, '').trim().slice(0, 16); st.name = v || st.name; inp.value = st.name; store.save(); });
     inp.addEventListener('keydown', e => e.stopPropagation()); body.appendChild(inp);
+    if (PT.ads.hasPrivacyOptions()) { const b = mk('button', 'btn ghost', 'Ad &amp; privacy choices'); b.onclick = () => { click(); PT.ads.showPrivacyOptions(); }; body.appendChild(b); }
     if (installPrompt) { const b = mk('button', 'btn ghost', 'Install on this device'); b.onclick = async () => { installPrompt.prompt(); installPrompt = null; closeModal(); }; body.appendChild(b); }
     const a = mk('div', 'about', `<img src="img/pt-logo.png" alt="Pizza Technologies logo"><p class="note">Pizza Stack v${cfg.version}<br>A game by <b>${cfg.studio}</b><br><a class="lnk" href="${cfg.privacyUrl}" target="_blank" rel="noopener">Privacy Policy</a> &middot; <a class="lnk" href="mailto:${cfg.supportEmail}">Support</a></p><p class="note" style="font-size:11px">Player ID: ${st.id.slice(0, 8)}</p>`);
     body.appendChild(a);
