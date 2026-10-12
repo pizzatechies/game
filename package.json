@@ -1,0 +1,77 @@
+{
+  "name": "pizza-stack",
+  "productName": "Pizza Stack",
+  "version": "1.0.0",
+  "description": "Pizza Stack - an addictive stacking arcade game by Pizza Technologies",
+  "author": {
+    "name": "Pizza Technologies",
+    "email": "support@pizzatechnologies.com"
+  },
+  "main": "electron/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "serve": "node tools/dev-server.js",
+    "server": "node server/server.js",
+    "icons": "node tools/make-icons.js",
+    "test": "node tools/test.js",
+    "cap:sync": "cap sync android",
+    "android:debug": "cap sync android && cd android && ./gradlew assembleDebug",
+    "android:release": "cap sync android && cd android && ./gradlew assembleRelease bundleRelease",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux",
+    "dist:mac": "electron-builder --mac"
+  },
+  "devDependencies": {
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "@capacitor-community/admob": "^8.2.1",
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3"
+  },
+  "homepage": "https://pizzatechnologies.com",
+  "build": {
+    "appId": "com.pizzatechnologies.pizzastack",
+    "productName": "Pizza Stack",
+    "copyright": "Copyright \u00a9 Pizza Technologies",
+    "files": [
+      "electron/**",
+      "www/**",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.png",
+      "publisherName": "Pizza Technologies"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Pizza Stack"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Game",
+      "icon": "build/icon.png",
+      "maintainer": "Pizza Technologies <support@pizzatechnologies.com>"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.games",
+      "icon": "build/icon.png"
+    }
+  }
+}

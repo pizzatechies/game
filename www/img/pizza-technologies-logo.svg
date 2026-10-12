@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 200">
+  <g>
+  <defs>
+    <radialGradient id="chL" cx="40%" cy="35%" r="75%"><stop offset="0" stop-color="#ffe27a"/><stop offset="1" stop-color="#f6b93b"/></radialGradient>
+  </defs>
+  <path d="M100,100 L121.74,18.86 A84,84 0 1 0 181.14,78.26 Z" fill="#d98a3a"/>
+  <path d="M100,100 L121.74,18.86 A84,84 0 1 0 181.14,78.26 Z" fill="url(#chL)" transform="translate(100 100) scale(.88) translate(-100 -100)"/>
+  <circle cx="70" cy="80" r="11" fill="#c8312b"/><circle cx="66.7" cy="76.7" r="3.8499999999999996" fill="#e85d4f" opacity=".7"/><circle cx="118" cy="128" r="12" fill="#c8312b"/><circle cx="114.4" cy="124.4" r="4.199999999999999" fill="#e85d4f" opacity=".7"/><circle cx="64" cy="128" r="9" fill="#c8312b"/><circle cx="61.3" cy="125.3" r="3.15" fill="#e85d4f" opacity=".7"/><circle cx="100" cy="108" r="8" fill="#c8312b"/><circle cx="97.6" cy="105.6" r="2.8" fill="#e85d4f" opacity=".7"/><circle cx="140" cy="100" r="9" fill="#c8312b"/><circle cx="137.3" cy="97.3" r="3.15" fill="#e85d4f" opacity=".7"/><circle cx="90" cy="55" r="8" fill="#c8312b"/><circle cx="87.6" cy="52.6" r="2.8" fill="#e85d4f" opacity=".7"/>
+  <g fill="none" stroke="#0e2a47" stroke-width="2.6" stroke-linecap="round" opacity=".85">
+    <path d="M100,100 L100,150 L125,150"/><path d="M100,100 L52,100 L40,112"/><path d="M100,100 L70,60 L56,60"/><path d="M118,128 L150,128"/>
+  </g>
+  <g fill="#27d3c4" stroke="#0e2a47" stroke-width="1.6"><circle cx="125" cy="150" r="4.2"/><circle cx="40" cy="112" r="4.2"/><circle cx="56" cy="60" r="4.2"/><circle cx="150" cy="128" r="4.2"/></g>
+  <path d="M111.31370849898477,88.68629150101523 L133.05,7.55 A84,84 0 0 1 192.45,66.95 Z" fill="#d98a3a"/>
+  <path d="M111.31370849898477,88.68629150101523 L133.05,7.55 A84,84 0 0 1 192.45,66.95 Z" fill="url(#chL)" transform="translate(111.31370849898477 88.68629150101523) scale(.88) translate(-111.31370849898477 -88.68629150101523)"/>
+  <circle cx="145.31370849898477" cy="54.68629150101523" r="8" fill="#c8312b"/>
+  <path d="M117.31370849898477,80.68629150101523 q24,-6 40,-28" stroke="#fff6d0" stroke-width="3" fill="none" stroke-linecap="round" opacity=".6"/></g>
+  <text x="208" y="92" font-family="Arial Black,Impact,Helvetica,sans-serif" font-size="60" font-weight="900" fill="#fff4e0" textLength="360" lengthAdjust="spacingAndGlyphs">PIZZA</text>
+  <text x="208" y="146" font-family="Arial,Helvetica,sans-serif" font-size="31" font-weight="700" fill="#27d3c4" textLength="360" lengthAdjust="spacing">TECHNOLOGIES</text>
+</svg>

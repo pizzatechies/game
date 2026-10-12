@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1a0f0a">
+<meta name="description" content="Pizza Stack - the addictive one-tap pizza stacking game from Pizza Technologies. Play online or offline.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Pizza Stack by Pizza Technologies</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <aside id="gutterL" class="gutter">
+    <img class="g-logo" src="img/pizza-technologies-logo.svg" alt="Pizza Technologies">
+    <h3>HOW TO PLAY</h3>
+    <ul>
+      <li><kbd>Click</kbd> / <kbd>Space</kbd> drops the pizza</li>
+      <li>Line it up <b>perfectly</b> to build combos</li>
+      <li><b>8 perfects</b> in a row = PIZZA FEVER</li>
+      <li><kbd>Esc</kbd> pauses</li>
+    </ul>
+    <div id="slotL" class="adslot"></div>
+  </aside>
+
+  <main id="stage">
+    <canvas id="cv"></canvas>
+
+    <!-- HUD -->
+    <div id="hud" class="hidden">
+      <button id="btnPause" class="icon-btn small" aria-label="Pause"><span class="ic ic-pause"></span></button>
+      <div id="score">0</div>
+      <div id="runCoins" class="pill"><i class="coin"></i><span>0</span></div>
+      <div id="combo"><div class="combo-txt">COMBO</div><div class="combo-bar"><div id="comboFill"></div></div></div>
+    </div>
+    <div id="hint" class="hidden"><b>TAP</b> to drop!<small>Line it up perfectly for combos</small></div>
+
+    <!-- Title -->
+    <section id="title" class="screen hidden">
+      <div class="presents"><img src="img/pizza-technologies-logo.svg" alt="Pizza Technologies"><span>presents</span></div>
+      <h1 class="game-title"><span>PIZZA</span><span>STACK</span></h1>
+      <div class="title-stats"><div>BEST <b id="tBest">0</b></div><div class="net" id="netPill"><i></i><span>OFFLINE</span></div></div>
+      <div class="title-bottom">
+        <button id="btnPlay" class="btn big pulse">PLAY</button>
+        <div class="icon-row">
+          <button class="icon-btn" data-open="shop" aria-label="Shop"><span class="ic ic-shop"></span><small>Shop</small></button>
+          <button class="icon-btn" data-open="missions" aria-label="Missions"><span class="ic ic-missions"></span><small>Missions</small><em id="badgeM" class="badge hidden">!</em></button>
+          <button class="icon-btn" data-open="board" aria-label="Leaderboard"><span class="ic ic-board"></span><small>Top Chefs</small></button>
+          <button class="icon-btn" data-open="settings" aria-label="Settings"><span class="ic ic-gear"></span><small>Settings</small></button>
+        </div>
+        <div class="coins-total pill"><i class="coin"></i><span id="tCoins">0</span></div>
+        <div class="foot">A <b>Pizza Technologies</b> game &copy; <span id="yr"></span></div>
+      </div>
+    </section>
+
+    <!-- Game over -->
+    <section id="over" class="screen hidden">
+      <div class="over-card">
+        <div class="over-title">GAME OVER</div>
+        <div class="ribbon hidden" id="newBest">NEW BEST!</div>
+        <div class="over-score"><small>SCORE</small><b id="oScore">0</b></div>
+        <div class="over-row"><div><small>BEST</small><b id="oBest">0</b></div><div><small>LAYERS</small><b id="oLayers">0</b></div><div><small>PERFECT</small><b id="oPerf">0</b></div></div>
+        <div class="over-coins pill"><i class="coin"></i><span id="oCoins">+0</span></div>
+        <div class="unlock" id="unlockBar"><div class="unlock-fill" id="unlockFill"></div><span id="unlockTxt"></span></div>
+        <button id="btnRevive" class="btn ad hidden"><span class="ic ic-play"></span> CONTINUE <small>watch ad</small></button>
+        <button id="btnDouble" class="btn ad2 hidden"><i class="coin"></i> DOUBLE COINS <small>watch ad</small></button>
+        <button id="btnRetry" class="btn big">PLAY AGAIN</button>
+        <div class="over-row2">
+          <button id="btnHome" class="icon-btn"><span class="ic ic-home"></span><small>Home</small></button>
+          <button id="btnShare" class="icon-btn"><span class="ic ic-share"></span><small>Share</small></button>
+          <button id="btnShopO" class="icon-btn"><span class="ic ic-shop"></span><small>Shop</small></button>
+        </div>
+        <div class="foot">A <b>Pizza Technologies</b> game</div>
+      </div>
+    </section>
+
+    <!-- Modal -->
+    <div id="modal" class="modal hidden"><div class="card"><header><h2 id="mTitle"></h2><button id="mClose" class="icon-btn small" aria-label="Close"><span class="ic ic-x"></span></button></header><div id="mBody" class="mbody"></div></div></div>
+
+    <!-- Pause -->
+    <div id="pauseOv" class="screen hidden"><div class="over-card"><div class="over-title">PAUSED</div><button id="btnResume" class="btn big">RESUME</button><button id="btnQuit" class="btn ghost">Quit to menu</button></div></div>
+
+    <!-- House ad (web/PC rewarded) -->
+    <div id="houseAd" class="screen">
+      <div class="over-card ha-card">
+        <div class="ha-tag">AD &middot; SPONSORED</div>
+        <img src="img/pizza-technologies-logo.svg" alt="Pizza Technologies" class="ha-logo">
+        <h3 class="ha-title">Sponsored</h3>
+        <p>Pizza Technologies is building more games, made for people who love a good stack. Thanks for playing!</p>
+        <a class="ha-link" id="haLink" href="#" target="_blank" rel="noopener">Visit Pizza Technologies</a>
+        <button class="btn big ha-close" disabled>Claim reward <span class="ha-count">5</span></button>
+      </div>
+    </div>
+
+    <!-- Splash -->
+    <div id="splash">
+      <div class="sp-inner">
+        <img class="sp-mark" src="img/pizza-mark.svg" alt="">
+        <div class="sp-name"><b>PIZZA</b><span>TECHNOLOGIES</span></div>
+        <div class="sp-bar"><i></i></div>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+    <div id="flash"></div>
+  </main>
+
+  <aside id="gutterR" class="gutter">
+    <h3>TOP CHEFS</h3>
+    <ol id="gutterBoard"></ol>
+    <div id="slotR" class="adslot"></div>
+    <p class="g-note">Pizza Stack &middot; a Pizza Technologies game</p>
+  </aside>
+</div>
+
+<script src="js/bus.js"></script>
+<script src="js/config.js"></script>
+<script src="js/store.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/net.js"></script>
+<script src="js/ads.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>

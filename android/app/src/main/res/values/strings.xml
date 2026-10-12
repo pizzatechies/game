@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Pizza Stack</string>
+    <string name="title_activity_main">Pizza Stack</string>
+    <string name="package_name">com.pizzatechnologies.pizzastack</string>
+    <string name="custom_url_scheme">com.pizzatechnologies.pizzastack</string>
+    <!-- Google's sample AdMob app id. Replace with the Pizza Technologies AdMob app id before publishing. -->
+    <string name="admob_app_id">ca-app-pub-3940256099942544~3347511713</string>
+</resources>

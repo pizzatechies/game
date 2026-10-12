@@ -1,0 +1,8 @@
+{
+  "appId": "com.pizzatechnologies.pizzastack",
+  "appName": "Pizza Stack",
+  "webDir": "www",
+  "backgroundColor": "#1a0f0a",
+  "android": { "allowMixedContent": false },
+  "server": { "androidScheme": "https" }
+}
