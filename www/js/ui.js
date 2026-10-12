@@ -287,7 +287,7 @@
     const inp = mk('input', 'txt'); inp.maxLength = 16; inp.value = st.name; inp.addEventListener('change', () => { const v = inp.value.replace(/[<>]/g, '').trim().slice(0, 16); st.name = v || st.name; inp.value = st.name; store.save(); });
     inp.addEventListener('keydown', e => e.stopPropagation()); body.appendChild(inp);
     if (installPrompt) { const b = mk('button', 'btn ghost', 'Install on this device'); b.onclick = async () => { installPrompt.prompt(); installPrompt = null; closeModal(); }; body.appendChild(b); }
-    const a = mk('div', 'about', `<img src="img/pizza-technologies-logo.svg" alt="Pizza Technologies"><p class="note">Pizza Stack v${cfg.version}<br>A game by <b>${cfg.studio}</b><br><a class="lnk" href="${cfg.privacyUrl}" target="_blank" rel="noopener">Privacy Policy</a> &middot; <a class="lnk" href="mailto:${cfg.supportEmail}">Support</a></p><p class="note" style="font-size:11px">Player ID: ${st.id.slice(0, 8)}</p>`);
+    const a = mk('div', 'about', `<img src="img/pt-logo.png" alt="Pizza Technologies logo"><p class="note">Pizza Stack v${cfg.version}<br>A game by <b>${cfg.studio}</b><br><a class="lnk" href="${cfg.privacyUrl}" target="_blank" rel="noopener">Privacy Policy</a> &middot; <a class="lnk" href="mailto:${cfg.supportEmail}">Support</a></p><p class="note" style="font-size:11px">Player ID: ${st.id.slice(0, 8)}</p>`);
     body.appendChild(a);
   }
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; });
@@ -302,14 +302,16 @@
     setNet(false);
     refreshTitle();
     if (!PT.ads.native && !PT.ads.electron && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => { });
-    let done = false;
+    let done = false, stage = 1;
+    const toGameSplash = () => { if (done || stage !== 1) return; stage = 2; el.splash.classList.add('stage2'); };
     const finish = () => {
       if (done) return; done = true;
-      el.splash.classList.add('out'); show('title'); setTimeout(() => el.splash.remove(), 600);
-      if (store.dailyStatus().can) setTimeout(() => { if (screen === 'title') openModal('missions'); }, 500);
+      el.splash.classList.add('out'); show('title'); setTimeout(() => el.splash.remove(), 700);
+      if (store.dailyStatus().can) setTimeout(() => { if (screen === 'title') openModal('missions'); }, 600);
     };
-    el.splash.addEventListener('pointerdown', finish);
-    setTimeout(finish, 2700);
+    el.splash.addEventListener('pointerdown', () => { if (stage === 1) toGameSplash(); else finish(); });
+    setTimeout(toGameSplash, 2300);   // studio logo, then the game's own splash
+    setTimeout(finish, 5300);
     show('splash');
   }
   window.addEventListener('contextmenu', e => e.preventDefault());

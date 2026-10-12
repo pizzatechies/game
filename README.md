@@ -6,7 +6,7 @@ One HTML5 code base ships to **Android (APK/AAB)**, **Windows / macOS / Linux**,
 
 | | |
 |---|---|
-| **Branding** | Animated Pizza Technologies splash, logo on title / game-over / settings / desktop side panel, "A Pizza Technologies game" footer, app icon and Android splash screens |
+| **Branding** | Two-stage launch splash (animated Pizza Technologies logo → animated Pizza Stack game splash, tap to skip), the official logo on title / sponsor screen / settings / desktop side panel, "A Pizza Technologies game" footer, app icon badge and native Android splash screens |
 | **Animations** | All drawn in code (canvas + CSS): squash & stretch, perfect rings, confetti, screen shake, fever rainbow, parallax worlds, falling slices, auto-playing attract mode on the title screen. Nothing to download → everything is inside the APK |
 | **Online + offline** | Fully playable with no connection. Service worker (web), bundled assets (Android/desktop). Scores queue locally and sync when online; leaderboard is cached for offline viewing; daily rewards/missions use the device clock |
 | **Addictive loop** | Instant restart, rising musical notes on perfect streaks, combos & fever, daily rewards (7-day streak), 3 daily missions, 8 unlockable pizza skins, 3 permanent upgrades, "next unlock" progress bar on every game-over, global leaderboard, share button |
@@ -87,4 +87,4 @@ android/              Capacitor Android project (AdMob wired in, portrait, test 
 electron/             desktop wrapper             server/       leaderboard + purchase backend
 tools/                icon generator, dev server, tests   .github/workflows/  CI builds
 ```
-Regenerate brand art/icons after editing `tools/make-icons.js`: `npm run icons`.
+The official logo lives in `brand/pizza-technologies-logo-original.png`. After changing it (or `tools/make-icons.js`) run `python3 tools/process-logo.py && npm run icons` to rebuild the transparent in-game logo, app icons and Android splash screens.
