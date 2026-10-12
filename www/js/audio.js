@@ -2,7 +2,7 @@
 (function () {
   const PT = window.PT;
   let ctx = null, master = null, sfxGain = null, musicGain = null, noiseBuf = null;
-  const MUSIC_LEVEL = 0.2;        // music bed level under the sound effects (verified with tools/music-render.js)
+  const MUSIC_LEVEL = 0.10;       // music bed under the sound effects: ~-31 dBFS RMS, so click/trim/drop stay clear (tools/music-render.js)
   let musicTimer = null, engine = null, engineCtx = null, stepIdx = 0;
   const S = () => PT.store.get().settings;
 
@@ -42,8 +42,8 @@
   const PENTA = [0, 2, 4, 7, 9];
 
   const sfx = {
-    click() { if (on()) tone(520, 0.06, 'triangle', 0.18); },
-    drop() { if (on()) { tone(150, 0.12, 'sine', 0.5, 0, 60); noise(0.07, 0.12, 1500); } },
+    click() { if (on()) tone(1047, 0.06, 'triangle', 0.3); },
+    drop() { if (on()) { tone(150, 0.12, 'sine', 0.5, 0, 60); noise(0.07, 0.3, 2500); } },
     perfect(combo) {
       if (!on()) return;
       const n = Math.max(0, combo - 1), idx = n % 5, oct = Math.min(2, Math.floor(n / 5));
@@ -51,7 +51,7 @@
       tone(hz(base), 0.28, 'triangle', 0.4);
       tone(hz(base + 12), 0.2, 'sine', 0.16, ctx.currentTime + 0.02);
     },
-    trim() { if (on()) { tone(210, 0.1, 'square', 0.12, 0, 120); } },
+    trim() { if (on()) { tone(1175, 0.1, 'square', 0.14, 0, 660); } },
     coin() { if (on()) { tone(988, 0.07, 'square', 0.1); tone(1319, 0.14, 'square', 0.1, ctx.currentTime + 0.07); } },
     fever() { if (on()) [0, 4, 7, 12, 16].forEach((s, i) => tone(hz(s + 12), 0.25, 'sawtooth', 0.14, ensure().currentTime + i * 0.06)); },
     over() { if (on()) { [7, 4, 0, -5].forEach((s, i) => tone(hz(s), 0.28, 'triangle', 0.35, ensure().currentTime + i * 0.13, hz(s) * 0.9)); noise(0.3, 0.2, 300); } },
@@ -65,7 +65,10 @@
     if (!engine || !ctx) return;
     // schedule every 16th-note step that falls inside the lookahead window
     let guard = 0;
-    while (engine.timeOf(stepIdx) < ctx.currentTime + LOOKAHEAD && guard++ < 64) engine.scheduleStep(stepIdx++);
+    while (engine.timeOf(stepIdx) < ctx.currentTime + LOOKAHEAD && guard++ < 512) {
+      if (engine.timeOf(stepIdx) < ctx.currentTime - 0.1) { stepIdx++; continue; }   // missed step: skip it, do not stack it up
+      engine.scheduleStep(stepIdx++);
+    }
   }
   function startMusic() {
     if (musicTimer || !S().music || !ensure() || !PT.music || !PT.songs) return;

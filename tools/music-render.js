@@ -50,9 +50,9 @@ function wav(path_, L, R, sr) {
     const eng = PT.music.create(ctx, master, song, { noFade: true, seed: 7 });
     eng.start(0.05);
     for (let n = 0; n < steps; n++) eng.scheduleStep(n);
-    const b = await ctx.startRendering();
+    const t0 = performance.now(); const b = await ctx.startRendering(); const renderMs = performance.now() - t0;
     const enc = (arr) => { const u = new Int16Array(arr.length); for (let i = 0; i < arr.length; i++) u[i] = Math.max(-32768, Math.min(32767, Math.round(arr[i] * 32767))); let s = ''; const bytes = new Uint8Array(u.buffer); for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); };
-    return { L: enc(b.getChannelData(0)), R: enc(b.getChannelData(1)), bpm: song.bpm, sd, loopSec: 128 * sd, title: song.title, peakRaw: 0 };
+    return { L: enc(b.getChannelData(0)), R: enc(b.getChannelData(1)), bpm: song.bpm, sd, loopSec: 128 * sd, title: song.title, renderMs, audioSec: dur };
   }, { LOOPS, sr, MUSIC_GAIN, SOLO });
   await browser.close();
 
@@ -83,7 +83,7 @@ function wav(path_, L, R, sr) {
 
   const m = { title: res.title, bpm: res.bpm, loopSeconds: +res.loopSec.toFixed(2), musicGain: MUSIC_GAIN, peakDb: +db(peak).toFixed(1), rmsDb: +db(overall).toFixed(1), crestDb: +(db(peak) - db(overall)).toFixed(1),
     clippedSamples: clip, dcOffset: +dc.toExponential(1), perBarRmsDb: perBar, spectralCentroidHz: Math.round(cen / mag), bandPercentEnergy: bands, silentWindowPct: +(100 * quiet / wins).toFixed(1),
-    seamMaxJump: +seamMax.toFixed(4), p999Jump: +p999.toFixed(4), wav: OUT };
+    renderSpeedX: +(res.audioSec / (res.renderMs / 1000)).toFixed(1), seamMaxJump: +seamMax.toFixed(4), p999Jump: +p999.toFixed(4), wav: OUT };
   console.log(JSON.stringify(m, null, 1));
   const fails = [];
   if (clip > 0) fails.push('clipping'); if (m.peakDb > -3) fails.push('peak above -3 dBFS (too hot for a background bed)');

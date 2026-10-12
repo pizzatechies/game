@@ -153,7 +153,7 @@
   $('#btnRevive').onclick = async () => {
     click();
     const ok = await PT.ads.showRewarded('Continue your stack');
-    if (ok && PT.game.revive()) { show('play'); el.combo.classList.remove('on', 'fever'); toast('Back in the kitchen!'); } else if (!ok) toast('Watch the full video to continue');
+    if (ok && PT.game.revive()) { PT.audio.setMuffle(false); show('play'); el.combo.classList.remove('on', 'fever'); toast('Back in the kitchen!'); } else if (!ok) toast('Watch the full video to continue');
   };
   $('#btnDouble').onclick = async () => {
     click();

@@ -12,7 +12,7 @@ PT.songs = {
       {"name": "Dm9", "notes": [53, 57, 60, 64], "bass": 38},
       {"name": "G13", "notes": [53, 59, 62, 64], "bass": 43},
       {"name": "Cmaj9", "notes": [55, 59, 62, 64], "bass": 36},
-      {"name": "Am9", "notes": [55, 59, 60, 64], "bass": 45},
+      {"name": "Am7", "notes": [52, 55, 60, 64], "bass": 45},
       {"name": "Dm9", "notes": [53, 57, 60, 64], "bass": 38},
       {"name": "G9sus4", "notes": [53, 57, 60, 62], "bass": 43}
     ],
