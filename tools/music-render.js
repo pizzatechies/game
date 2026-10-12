@@ -6,6 +6,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = path.join(__dirname, '..');
 const OUT = process.argv[2] || path.join(require('os').tmpdir(), 'pizza-music.wav');
 const LOOPS = +process.env.LOOPS || 2;
+const SOLO = process.env.SOLO || '';      // keys | bass | lead | kick | snare | hat | all-but:<part>  -> isolate one instrument for mix analysis
 const MUSIC_GAIN = +(process.env.MUSIC_GAIN || require('fs').readFileSync(path.join(root, 'www/js/audio.js'), 'utf8').match(/MUSIC_LEVEL\s*=\s*([0-9.]+)/)?.[1] || 0.3);
 const db = x => 20 * Math.log10(Math.max(x, 1e-9));
 
@@ -33,8 +34,17 @@ function wav(path_, L, R, sr) {
   await page.addScriptTag({ content: 'window.PT = window.PT || {};' });
   for (const f of ['js/song.js', 'js/music.js']) await page.addScriptTag({ path: path.join(root, 'www', f) });
   const sr = 44100;
-  const res = await page.evaluate(async ({ LOOPS, sr, MUSIC_GAIN }) => {
-    const song = PT.songs.lofipop, sd = 60 / song.bpm / 4, steps = LOOPS * 128, dur = steps * sd + 3.5;
+  const res = await page.evaluate(async ({ LOOPS, sr, MUSIC_GAIN, SOLO }) => {
+    const song = JSON.parse(JSON.stringify(PT.songs.lofipop));
+    if (SOLO) {
+      const keep = (k) => SOLO === k;
+      if (!keep('keys')) song.comp = [[], []];
+      if (!keep('bass')) song.bassPattern = [];
+      if (!keep('lead')) song.melody = [];
+      const dr = (o) => ({ kick: keep('kick') ? o.kick : [], snare: keep('snare') ? o.snare : [], hat: keep('hat') ? o.hat : [], ghost: [], openHat: keep('hat') ? o.openHat : [] });
+      song.drums = Object.assign(dr(song.drums), { fill: dr(song.drums.fill) });
+    }
+    const sd = 60 / song.bpm / 4, steps = LOOPS * 128, dur = steps * sd + 3.5;
     const ctx = new OfflineAudioContext(2, Math.ceil(sr * dur), sr);
     const master = ctx.createGain(); master.gain.value = MUSIC_GAIN; master.connect(ctx.destination);
     const eng = PT.music.create(ctx, master, song, { noFade: true, seed: 7 });
@@ -43,7 +53,7 @@ function wav(path_, L, R, sr) {
     const b = await ctx.startRendering();
     const enc = (arr) => { const u = new Int16Array(arr.length); for (let i = 0; i < arr.length; i++) u[i] = Math.max(-32768, Math.min(32767, Math.round(arr[i] * 32767))); let s = ''; const bytes = new Uint8Array(u.buffer); for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); };
     return { L: enc(b.getChannelData(0)), R: enc(b.getChannelData(1)), bpm: song.bpm, sd, loopSec: 128 * sd, title: song.title, peakRaw: 0 };
-  }, { LOOPS, sr, MUSIC_GAIN });
+  }, { LOOPS, sr, MUSIC_GAIN, SOLO });
   await browser.close();
 
   const dec = s => { const b = Buffer.from(s, 'base64'); const i16 = new Int16Array(b.buffer, b.byteOffset, b.length / 2); const f = new Float32Array(i16.length); for (let i = 0; i < f.length; i++) f[i] = i16[i] / 32767; return f; };
@@ -80,6 +90,7 @@ function wav(path_, L, R, sr) {
   if (m.rmsDb < -38) fails.push('too quiet'); if (m.rmsDb > -20) fails.push('too loud for a background bed (> -20 dBFS RMS)');
   if (Math.abs(dc) > 0.005) fails.push('DC offset'); if (m.silentWindowPct > 5) fails.push('dead air');
   if (seamMax > p999 * 2.5 && seamMax > 0.02) fails.push('click at the loop seam');
+  if (SOLO) { console.log(`(solo "${SOLO}": measurements only, thresholds skipped)`); return; }
   if (fails.length) { console.error('MUSIC CHECK FAILED: ' + fails.join('; ')); process.exit(1); }
   console.log('music checks passed');
 })().catch(e => { console.error(e); process.exit(2); });

@@ -2,7 +2,7 @@
 (function () {
   const PT = window.PT;
   let ctx = null, master = null, sfxGain = null, musicGain = null, noiseBuf = null;
-  const MUSIC_LEVEL = 0.3;        // music bed level under the sound effects (verified with tools/music-render.js)
+  const MUSIC_LEVEL = 0.2;        // music bed level under the sound effects (verified with tools/music-render.js)
   let musicTimer = null, engine = null, engineCtx = null, stepIdx = 0;
   const S = () => PT.store.get().settings;
 

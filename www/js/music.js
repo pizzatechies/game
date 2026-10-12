@@ -57,7 +57,7 @@
 
     /* sub-mixes */
     const mix = (g) => { const n = ctx.createGain(); n.gain.value = g; n.connect(bus); return n; };
-    const keysBus = mix(1.6), bassBus = mix(0.5), drumBus = mix(0.7), leadBus = mix(2.0);
+    const keysBus = mix(1.6), bassBus = mix(0.45), drumBus = mix(0.7), leadBus = mix(2.0);
 
     /* reverb (post-saturation so it stays clean) + dotted-eighth echo for the lead */
     const verb = ctx.createConvolver(); verb.buffer = ir;
@@ -109,13 +109,16 @@
     }
     function bass(t, midi, dur, vel) {
       const f = mtof(midi), end = t + dur;
-      const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), g = ctx.createGain(), g2 = ctx.createGain(), flt = ctx.createBiquadFilter();
-      o1.type = 'sine'; o2.type = 'triangle'; o1.frequency.value = f; o2.frequency.value = f; g2.gain.value = 0.22;
-      flt.type = 'lowpass'; flt.frequency.value = 520; flt.Q.value = 0.4;
-      const stopAt = adsr(g.gain, t, dur, { a: 0.012, peak: 0.52 * vel, d: 0.3, s: 0.62, r: 0.1 });
-      wobble(o1, t, end, -3); wobble(o2, t, end, -3);
-      o1.connect(g); o2.connect(g2); g2.connect(g); g.connect(flt); flt.connect(bassBus);
-      o1.start(t); o2.start(t); o1.stop(stopAt); o2.stop(stopAt);
+      const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), o3 = ctx.createOscillator();
+      const g = ctx.createGain(), g2 = ctx.createGain(), g3 = ctx.createGain(), flt = ctx.createBiquadFilter();
+      o1.type = 'sine'; o2.type = 'triangle'; o3.type = 'sine';
+      o1.frequency.value = f; o2.frequency.value = f; o3.frequency.value = f * 2;   // 2nd harmonic: audible on phone speakers that can't reproduce < 120 Hz
+      g2.gain.value = 0.22; g3.gain.setValueAtTime(0.4, t); g3.gain.exponentialRampToValueAtTime(0.12, t + 0.3);
+      flt.type = 'lowpass'; flt.frequency.value = 620; flt.Q.value = 0.4;
+      const stopAt = adsr(g.gain, t, dur, { a: 0.012, peak: 0.46 * vel, d: 0.3, s: 0.62, r: 0.1 });
+      wobble(o1, t, end, -3); wobble(o2, t, end, -3); wobble(o3, t, end, -3);
+      o1.connect(g); o2.connect(g2); g2.connect(g); o3.connect(g3); g3.connect(g); g.connect(flt); flt.connect(bassBus);
+      o1.start(t); o2.start(t); o3.start(t); o1.stop(stopAt); o2.stop(stopAt); o3.stop(stopAt);
     }
     function lead(t, midi, dur, vel, level) {      // soft bell / pluck
       const f = mtof(midi), end = t + dur;
@@ -140,7 +143,7 @@
     function snare(t, v) {
       const n = noiseSrc(t, 0.22), bp = ctx.createBiquadFilter(), lpf = ctx.createBiquadFilter(), g = ctx.createGain();
       bp.type = 'bandpass'; bp.frequency.value = 1900; bp.Q.value = 0.8; lpf.type = 'lowpass'; lpf.frequency.value = 5500;
-      g.gain.setValueAtTime(0.3 * v, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      g.gain.setValueAtTime(0.34 * v, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
       n.connect(bp); bp.connect(lpf); lpf.connect(g); g.connect(drumBus);
       const o = ctx.createOscillator(), og = ctx.createGain();
       o.type = 'sine'; o.frequency.setValueAtTime(190, t); o.frequency.exponentialRampToValueAtTime(140, t + 0.1);
@@ -156,7 +159,7 @@
     function hat(t, v, open) {
       const len = open ? 0.26 : 0.05, n = noiseSrc(t, len + 0.02), hpf = ctx.createBiquadFilter(), g = ctx.createGain();
       hpf.type = 'highpass'; hpf.frequency.value = open ? 6500 : 7500;
-      g.gain.setValueAtTime((open ? 0.2 : 0.22) * v, t); g.gain.exponentialRampToValueAtTime(0.001, t + len);
+      g.gain.setValueAtTime((open ? 0.25 : 0.28) * v, t); g.gain.exponentialRampToValueAtTime(0.001, t + len);
       n.connect(hpf); hpf.connect(g); g.connect(drumBus);
     }
     function crackle(t) {                          // a vinyl pop
