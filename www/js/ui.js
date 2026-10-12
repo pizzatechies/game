@@ -63,9 +63,9 @@
     el.score.textContent = '0'; el.runCoins.querySelector('span').textContent = '0';
     el.combo.classList.remove('on', 'fever');
     if (!st.tutorialDone) el.hint.classList.remove('hidden');
-    PT.audio.ensure(); PT.audio.syncMusic();
+    PT.audio.ensure(); PT.audio.syncMusic(); PT.audio.setMuffle(false); PT.audio.setEnergy(false);
   }
-  function goHome() { click(); PT.game.start(true); show('title'); refreshTitle(); }
+  function goHome() { click(); PT.game.start(true); show('title'); refreshTitle(); PT.audio.setMuffle(false); PT.audio.setEnergy(false); }
 
   function onTap(e) {
     if (screen !== 'play') return;
@@ -108,10 +108,11 @@
     el.comboFill.style.width = fever ? '100%' : ((combo % 8) / 8 * 100) + '%';
     el.combo.querySelector('.combo-txt').textContent = fever ? 'PIZZA FEVER!' : (combo > 1 ? 'COMBO x' + combo : 'COMBO');
   });
-  PT.bus.on('fever', f => { if (f) { const fl = document.getElementById('flash'); fl.style.transition = 'none'; fl.style.opacity = .5; requestAnimationFrame(() => { fl.style.transition = 'opacity .5s'; fl.style.opacity = 0; }); } });
+  PT.bus.on('fever', f => { PT.audio.setEnergy(f); if (f) { const fl = document.getElementById('flash'); fl.style.transition = 'none'; fl.style.opacity = .5; requestAnimationFrame(() => { fl.style.transition = 'opacity .5s'; fl.style.opacity = 0; }); } });
 
   /* ---------- game over ---------- */
   let over = null;
+  PT.bus.on('over-start', () => { if (screen === 'play') { PT.audio.setEnergy(false); PT.audio.setMuffle(true); } });
   PT.bus.on('over', r => {
     const st = store.get();
     const first = !run.counted;

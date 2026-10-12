@@ -2,7 +2,8 @@
 (function () {
   const PT = window.PT;
   let ctx = null, master = null, sfxGain = null, musicGain = null, noiseBuf = null;
-  let musicTimer = null, step = 0, nextT = 0;
+  const MUSIC_LEVEL = 0.3;        // music bed level under the sound effects (verified with tools/music-render.js)
+  let musicTimer = null, engine = null, engineCtx = null, stepIdx = 0;
   const S = () => PT.store.get().settings;
 
   function ensure() {
@@ -12,7 +13,7 @@
     ctx = new AC();
     master = ctx.createGain(); master.gain.value = 0.8; master.connect(ctx.destination);
     sfxGain = ctx.createGain(); sfxGain.connect(master);
-    musicGain = ctx.createGain(); musicGain.gain.value = 0.16; musicGain.connect(master);
+    musicGain = ctx.createGain(); musicGain.gain.value = MUSIC_LEVEL; musicGain.connect(master);
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     return ctx;
@@ -58,30 +59,30 @@
     zone() { if (on()) [0, 7, 12, 19].forEach((s, i) => tone(hz(s + 12), 0.3, 'sine', 0.22, ensure().currentTime + i * 0.09)); }
   };
 
-  /* ---------- music: simple 4-chord loop (bass + arpeggio + hat) ---------- */
-  const CHORDS = [[0, 4, 7], [-3, 0, 4], [-7, -3, 0], [-5, -1, 2]]; // C Am F G (relative)
-  function schedule() {
-    if (!ctx) return;
-    while (nextT < ctx.currentTime + 0.25) {
-      const bar = Math.floor(step / 16) % 4, s16 = step % 16, ch = CHORDS[bar];
-      if (s16 % 4 === 0) tone(hz(ch[0] - 12), 0.22, 'triangle', 0.5, nextT, null, musicGain);
-      if (s16 % 2 === 0) tone(hz(ch[(s16 / 2) % 3] + 12), 0.14, 'square', 0.16, nextT, null, musicGain);
-      if (s16 % 2 === 1) { // hat
-        const s = ctx.createBufferSource(), g = ctx.createGain(), f = ctx.createBiquadFilter();
-        s.buffer = noiseBuf; f.type = 'highpass'; f.frequency.value = 7000;
-        g.gain.setValueAtTime(0.12, nextT); g.gain.exponentialRampToValueAtTime(0.0001, nextT + 0.04);
-        s.connect(f); f.connect(g); g.connect(musicGain); s.start(nextT); s.stop(nextT + 0.05);
-      }
-      nextT += 60 / 132 / 4; step++;
-    }
+  /* ---------- music: lofi-pop loop (see music.js / song.js) ---------- */
+  const LOOKAHEAD = 0.45;
+  function tick() {
+    if (!engine || !ctx) return;
+    // schedule every 16th-note step that falls inside the lookahead window
+    let guard = 0;
+    while (engine.timeOf(stepIdx) < ctx.currentTime + LOOKAHEAD && guard++ < 64) engine.scheduleStep(stepIdx++);
   }
   function startMusic() {
-    if (musicTimer || !S().music || !ensure()) return;
-    nextT = ctx.currentTime + 0.05; step = 0;
-    musicTimer = setInterval(schedule, 90);
+    if (musicTimer || !S().music || !ensure() || !PT.music || !PT.songs) return;
+    if (!engine || engineCtx !== ctx) { engine = PT.music.create(ctx, musicGain, PT.songs.lofipop, { seed: 20260101 }); engineCtx = ctx; }
+    stepIdx = 0;
+    engine.start(ctx.currentTime + 0.12);
+    musicTimer = setInterval(tick, 90);
+    tick();
   }
-  function stopMusic() { clearInterval(musicTimer); musicTimer = null; }
+  function stopMusic() {
+    clearInterval(musicTimer); musicTimer = null;
+    if (engine) engine.stop();
+  }
   function syncMusic() { if (S().music) startMusic(); else stopMusic(); }
+  /* Pizza Fever = brighter, busier mix; game over = muffled. */
+  function setEnergy(on) { if (engine) engine.setEnergy(on); }
+  function setMuffle(on) { if (engine) engine.setMuffle(on); }
 
   /* Browsers/WebViews only allow audio after a gesture. */
   function unlock() { ensure(); syncMusic(); }
@@ -93,5 +94,5 @@
 
   function vibrate(ms) { if (PT.store.get().settings.vibe && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* ignore */ } } }
 
-  PT.audio = Object.assign({ ensure, syncMusic, vibrate }, sfx);
+  PT.audio = Object.assign({ ensure, syncMusic, vibrate, setEnergy, setMuffle, musicRunning: () => !!musicTimer, ctxState: () => (ctx ? ctx.state : 'none') }, sfx);
 })();

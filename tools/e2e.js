@@ -27,6 +27,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   await p.click('#btnPlay', { force: true });
   await p.waitForFunction(() => PT.game.state && !PT.game.state.demo); ok('run started from title');
+  // music: starts on the first gesture, can be switched off/on in Settings, never throws
+  assert.ok(await p.evaluate(() => PT.audio.musicRunning()) && (await p.evaluate(() => PT.audio.ctxState())) === 'running'); ok('lofi-pop music is playing after the first tap');
+  await p.evaluate(() => { PT.store.get().settings.music = false; PT.audio.syncMusic(); });
+  assert.strictEqual(await p.evaluate(() => PT.audio.musicRunning()), false);
+  await p.evaluate(() => { PT.store.get().settings.music = true; PT.audio.syncMusic(); });
+  assert.strictEqual(await p.evaluate(() => PT.audio.musicRunning()), true); ok('music toggle stops and restarts the track');
   const drop = (off) => p.evaluate((off) => { const s = PT.game.state, t = s.layers[s.layers.length - 1]; s.cur.x = t.x + off; return PT.game.tap(); }, off);
   for (let i = 0; i < 8; i++) await drop(1);
   let st = await p.evaluate(() => { const s = PT.game.state; return { combo: s.combo, fever: s.fever, score: s.score }; });
