@@ -32,12 +32,13 @@ The sandbox this was written in blocks Google's Android SDK/Maven servers, so th
 2. Download the artifacts from the finished run:
    * `PizzaStack-android-debug-apk` → `app-debug.apk` — install directly on any Android phone (allow "unknown sources").
    * `PizzaStack-windows` (`.exe` installer + portable), `PizzaStack-linux` (`.AppImage`, `.deb`), `PizzaStack-macos` (`.dmg`).
-3. **Release-signed APK + Play Store AAB**: create a keystore once, add 4 repository secrets, push again.
+3. **Official release-signed APK + Play Store / Galaxy Store AAB** (needs YOUR signing key, which I can never create for you):
    ```bash
-   keytool -genkeypair -v -keystore pizza.keystore -alias pizza -keyalg RSA -keysize 2048 -validity 10000
-   base64 -w0 pizza.keystore        # -> secret ANDROID_KEYSTORE_BASE64
+   bash tools/make-keystore.sh        # on your computer, needs a JDK; prompts for a password
    ```
-   Secrets: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. **Back the keystore up — you cannot update the app on Google Play without it.**
+   It prints the 4 values to add under **Settings → Secrets and variables → Actions**: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Then push (or run the workflow again) and download **`PizzaStack-android-release`** (signed `.apk` + `.aab`). **Back the keystore up — you cannot update the app in any store without it.** Never commit it to git.
+   Before building the official release also put your real AdMob IDs in `config.js`/`strings.xml` (see "Making money"), otherwise the release ships Google's test ads.
+   Until the secrets exist, CI still builds a release APK + AAB with a throwaway key, uploaded as `PizzaStack-android-release-THROWAWAY-KEY-NOT-FOR-STORES`, only to prove the release pipeline works. Those files must not be published.
 4. Pushing a tag like `v1.0.0` also publishes everything as a GitHub Release.
 
 Prefer building locally? Install Android Studio (JDK 21) and run `npm run android:debug` (APK lands in `android/app/build/outputs/apk/debug/`) or `npm run android:release`. Desktop installers: `npm run dist:win|linux|mac` (build each on its own OS).
