@@ -17,7 +17,8 @@
 <div id="app">
 
   <aside id="gutterL" class="gutter">
-    <img class="g-logo" src="img/pizza-technologies-logo.svg" alt="Pizza Technologies">
+    <img class="g-logo" src="img/pt-logo.png" alt="Pizza Technologies logo">
+    <div class="g-name">PIZZA TECHNOLOGIES</div>
     <h3>HOW TO PLAY</h3>
     <ul>
       <li><kbd>Click</kbd> / <kbd>Space</kbd> drops the pizza</li>
@@ -42,7 +43,7 @@
 
     <!-- Title -->
     <section id="title" class="screen hidden">
-      <div class="presents"><img src="img/pizza-technologies-logo.svg" alt="Pizza Technologies"><span>presents</span></div>
+      <div class="presents"><img src="img/pt-logo.png" alt="Pizza Technologies logo"><span>presents</span></div>
       <h1 class="game-title"><span>PIZZA</span><span>STACK</span></h1>
       <div class="title-stats"><div>BEST <b id="tBest">0</b></div><div class="net" id="netPill"><i></i><span>OFFLINE</span></div></div>
       <div class="title-bottom">
@@ -89,7 +90,8 @@
     <div id="houseAd" class="screen">
       <div class="over-card ha-card">
         <div class="ha-tag">AD &middot; SPONSORED</div>
-        <img src="img/pizza-technologies-logo.svg" alt="Pizza Technologies" class="ha-logo">
+        <img src="img/pt-logo.png" alt="Pizza Technologies logo" class="ha-logo">
+        <div class="ha-name">PIZZA TECHNOLOGIES</div>
         <h3 class="ha-title">Sponsored</h3>
         <p>Pizza Technologies is building more games, made for people who love a good stack. Thanks for playing!</p>
         <a class="ha-link" id="haLink" href="#" target="_blank" rel="noopener">Visit Pizza Technologies</a>
@@ -97,12 +99,35 @@
       </div>
     </div>
 
+    <!-- Waiting for a rewarded video to load -->
+    <div id="adWait" class="screen"><div class="aw-card"><div class="aw-spin"></div><div class="aw-txt">Loading video…</div><button id="btnAdCancel" class="btn ghost">Cancel</button></div></div>
+
     <!-- Splash -->
     <div id="splash">
-      <div class="sp-inner">
-        <img class="sp-mark" src="img/pizza-mark.svg" alt="">
-        <div class="sp-name"><b>PIZZA</b><span>TECHNOLOGIES</span></div>
-        <div class="sp-bar"><i></i></div>
+      <!-- stage 1: studio logo -->
+      <div class="sp-stage sp-studio">
+        <div class="sp-inner">
+          <img class="sp-mark" src="img/pt-logo.png" alt="Pizza Technologies logo">
+          <div class="sp-name"><b>PIZZA</b><span>TECHNOLOGIES</span></div>
+          <div class="sp-bar"><i></i></div>
+        </div>
+      </div>
+      <!-- stage 2: the game -->
+      <div class="sp-stage sp-game" aria-label="Pizza Stack">
+        <div class="sg-rays"></div>
+        <i class="sg-star" style="--x:12%;--y:14%;--d:0s"></i><i class="sg-star" style="--x:84%;--y:10%;--d:.6s"></i><i class="sg-star" style="--x:70%;--y:30%;--d:1.1s"></i><i class="sg-star" style="--x:20%;--y:36%;--d:.3s"></i><i class="sg-star" style="--x:92%;--y:44%;--d:.9s"></i>
+        <h2 class="sg-title"><span>PIZZA</span><span>STACK</span></h2>
+        <div class="sg-tower">
+          <div class="sg-layer" style="--i:0;--w:62%;--h:30"></div>
+          <div class="sg-layer" style="--i:1;--w:56%;--h:36"></div>
+          <div class="sg-layer" style="--i:2;--w:50%;--h:24"></div>
+          <div class="sg-layer" style="--i:3;--w:44%;--h:44"></div>
+          <div class="sg-layer perfect" style="--i:4;--w:44%;--h:16"></div>
+        </div>
+        <div class="sg-plate"></div>
+        <div class="sg-perfect">PERFECT!</div>
+        <div class="sg-by">A <b>Pizza Technologies</b> game</div>
+        <div class="sg-tap">TAP TO SKIP</div>
       </div>
     </div>
 
@@ -121,6 +146,8 @@
 <script src="js/bus.js"></script>
 <script src="js/config.js"></script>
 <script src="js/store.js"></script>
+<script src="js/song.js"></script>
+<script src="js/music.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/net.js"></script>
 <script src="js/ads.js"></script>

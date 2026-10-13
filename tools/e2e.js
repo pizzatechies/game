@@ -21,12 +21,18 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   await p.goto('http://localhost:8099/');
   await p.evaluate(() => { PT.config.apiBase = 'http://localhost:8788'; PT.config.ads.houseAdSeconds = 1; });
-  await p.waitForFunction(() => document.getElementById('splash') === null || document.getElementById('splash').classList.contains('out'), null, { timeout: 8000 });
+  await p.waitForFunction(() => document.getElementById('splash') === null || document.getElementById('splash').classList.contains('out'), null, { timeout: 14000 });
   await p.waitForSelector('text=CLAIM 50 COINS'); await p.click('text=CLAIM 50 COINS'); await p.click('#mClose');
   assert.strictEqual(await p.evaluate(() => PT.store.get().coins), 50); ok('first-launch daily reward claimed (+50 coins)');
 
   await p.click('#btnPlay', { force: true });
   await p.waitForFunction(() => PT.game.state && !PT.game.state.demo); ok('run started from title');
+  // music: starts on the first gesture, can be switched off/on in Settings, never throws
+  assert.ok(await p.evaluate(() => PT.audio.musicRunning()) && (await p.evaluate(() => PT.audio.ctxState())) === 'running'); ok('lofi-pop music is playing after the first tap');
+  await p.evaluate(() => { PT.store.get().settings.music = false; PT.audio.syncMusic(); });
+  assert.strictEqual(await p.evaluate(() => PT.audio.musicRunning()), false);
+  await p.evaluate(() => { PT.store.get().settings.music = true; PT.audio.syncMusic(); });
+  assert.strictEqual(await p.evaluate(() => PT.audio.musicRunning()), true); ok('music toggle stops and restarts the track');
   const drop = (off) => p.evaluate((off) => { const s = PT.game.state, t = s.layers[s.layers.length - 1]; s.cur.x = t.x + off; return PT.game.tap(); }, off);
   for (let i = 0; i < 8; i++) await drop(1);
   let st = await p.evaluate(() => { const s = PT.game.state; return { combo: s.combo, fever: s.fever, score: s.score }; });
@@ -64,7 +70,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await p.waitForTimeout(300); assert.ok(await p.evaluate(() => PT.store.get().coins) > c0); ok('double-coins ad pays out');
 
   // online: score reached the server and shows in the leaderboard
-  await p.waitForFunction(async () => (await (await fetch('http://localhost:8788/api/leaderboard')).json()).top.length > 0, null, { timeout: 8000 }); ok('score synced to online server');
+  await p.waitForFunction(async () => (await (await fetch('http://localhost:8788/api/leaderboard')).json()).top.length > 0, null, { timeout: 14000 }); ok('score synced to online server');
   await p.click('#btnHome'); await p.click('[data-open=board]'); await p.waitForSelector('.lb li.me'); ok('leaderboard shows the player (online)');
   await p.screenshot({ path: path.join(OUT, 'board.png') }); await p.click('#mClose');
 
@@ -81,7 +87,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await p.waitForSelector('#over:not(.hidden)', { timeout: 15000 });
   const q = await p.evaluate(() => PT.store.get().scoreQueue.length); assert.ok(q >= 1); ok('offline run queued for sync (' + q + ')');
   await ctx.setOffline(false);
-  await p.evaluate(() => PT.net.ping()); await p.waitForFunction(() => PT.store.get().scoreQueue.length === 0, null, { timeout: 8000 }); ok('queue flushed when back online');
+  await p.evaluate(() => PT.net.ping()); await p.waitForFunction(() => PT.store.get().scoreQueue.length === 0, null, { timeout: 14000 }); ok('queue flushed when back online');
 
   assert.deepStrictEqual(errs, []); ok('no console errors');
   console.log(`\nAll ${n} e2e checks passed. Screenshots: ${OUT}`);

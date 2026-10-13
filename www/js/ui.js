@@ -14,6 +14,8 @@
   let toastT;
   function toast(msg) { el.toast.textContent = msg; el.toast.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.toast.classList.remove('show'), 2400); }
   PT.bus.on('toast', toast);
+  PT.bus.on('ads-wait', on => document.getElementById('adWait').classList.toggle('show', !!on));
+  document.getElementById('btnAdCancel').onclick = () => { click(); PT.ads.cancelWait(); };
   const fmt = n => n.toLocaleString('en-US');
   const click = () => PT.audio.click();
   function show(name) {
@@ -63,9 +65,9 @@
     el.score.textContent = '0'; el.runCoins.querySelector('span').textContent = '0';
     el.combo.classList.remove('on', 'fever');
     if (!st.tutorialDone) el.hint.classList.remove('hidden');
-    PT.audio.ensure(); PT.audio.syncMusic();
+    PT.audio.ensure(); PT.audio.syncMusic(); PT.audio.setMuffle(false); PT.audio.setEnergy(false);
   }
-  function goHome() { click(); PT.game.start(true); show('title'); refreshTitle(); }
+  function goHome() { click(); PT.game.start(true); show('title'); refreshTitle(); PT.audio.setMuffle(false); PT.audio.setEnergy(false); }
 
   function onTap(e) {
     if (screen !== 'play') return;
@@ -108,10 +110,11 @@
     el.comboFill.style.width = fever ? '100%' : ((combo % 8) / 8 * 100) + '%';
     el.combo.querySelector('.combo-txt').textContent = fever ? 'PIZZA FEVER!' : (combo > 1 ? 'COMBO x' + combo : 'COMBO');
   });
-  PT.bus.on('fever', f => { if (f) { const fl = document.getElementById('flash'); fl.style.transition = 'none'; fl.style.opacity = .5; requestAnimationFrame(() => { fl.style.transition = 'opacity .5s'; fl.style.opacity = 0; }); } });
+  PT.bus.on('fever', f => { PT.audio.setEnergy(f); if (f) { const fl = document.getElementById('flash'); fl.style.transition = 'none'; fl.style.opacity = .5; requestAnimationFrame(() => { fl.style.transition = 'opacity .5s'; fl.style.opacity = 0; }); } });
 
   /* ---------- game over ---------- */
   let over = null;
+  PT.bus.on('over-start', () => { if (screen === 'play') { PT.audio.setEnergy(false); PT.audio.setMuffle(true); } });
   PT.bus.on('over', r => {
     const st = store.get();
     const first = !run.counted;
@@ -152,7 +155,7 @@
   $('#btnRevive').onclick = async () => {
     click();
     const ok = await PT.ads.showRewarded('Continue your stack');
-    if (ok && PT.game.revive()) { show('play'); el.combo.classList.remove('on', 'fever'); toast('Back in the kitchen!'); } else if (!ok) toast('Watch the full video to continue');
+    if (ok && PT.game.revive()) { PT.audio.setMuffle(false); show('play'); el.combo.classList.remove('on', 'fever'); toast('Back in the kitchen!'); } else if (!ok) toast('Watch the full video to continue');
   };
   $('#btnDouble').onclick = async () => {
     click();
@@ -286,8 +289,15 @@
     body.appendChild(mk('div', 'note', 'LEADERBOARD NAME'));
     const inp = mk('input', 'txt'); inp.maxLength = 16; inp.value = st.name; inp.addEventListener('change', () => { const v = inp.value.replace(/[<>]/g, '').trim().slice(0, 16); st.name = v || st.name; inp.value = st.name; store.save(); });
     inp.addEventListener('keydown', e => e.stopPropagation()); body.appendChild(inp);
+    const adst = PT.ads.status(); if (adst) { const n = mk('div', 'note'); n.textContent = 'Ad status: ' + adst.text; n.style.userSelect = 'text'; body.appendChild(n); }
+    if (adst && cfg.ads.testMode) {                         // test builds only: tools for setting up ads in the LevelPlay dashboard
+      const ts = mk('button', 'btn ghost', 'Open ad test suite'); ts.onclick = () => { click(); PT.ads.launchTestSuite(); }; body.appendChild(ts);
+      const idn = mk('div', 'note'); idn.style.userSelect = 'text'; idn.textContent = 'Device ad ID (for LevelPlay test devices): …'; body.appendChild(idn);
+      PT.ads.deviceAdId().then(id => { idn.textContent = 'Device ad ID (for LevelPlay test devices): ' + (id || 'not available yet'); });
+    }
+    if (PT.ads.hasPrivacyOptions()) { const b = mk('button', 'btn ghost', 'Ad &amp; privacy choices'); b.onclick = () => { click(); PT.ads.showPrivacyOptions(); }; body.appendChild(b); }
     if (installPrompt) { const b = mk('button', 'btn ghost', 'Install on this device'); b.onclick = async () => { installPrompt.prompt(); installPrompt = null; closeModal(); }; body.appendChild(b); }
-    const a = mk('div', 'about', `<img src="img/pizza-technologies-logo.svg" alt="Pizza Technologies"><p class="note">Pizza Stack v${cfg.version}<br>A game by <b>${cfg.studio}</b><br><a class="lnk" href="${cfg.privacyUrl}" target="_blank" rel="noopener">Privacy Policy</a> &middot; <a class="lnk" href="mailto:${cfg.supportEmail}">Support</a></p><p class="note" style="font-size:11px">Player ID: ${st.id.slice(0, 8)}</p>`);
+    const a = mk('div', 'about', `<img src="img/pt-logo.png" alt="Pizza Technologies logo"><p class="note">Pizza Stack v${cfg.version}<br>A game by <b>${cfg.studio}</b><br><a class="lnk" href="${cfg.privacyUrl}" target="_blank" rel="noopener">Privacy Policy</a> &middot; <a class="lnk" href="mailto:${cfg.supportEmail}">Support</a></p><p class="note" style="font-size:11px">Player ID: ${st.id.slice(0, 8)}</p>`);
     body.appendChild(a);
   }
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; });
@@ -302,14 +312,16 @@
     setNet(false);
     refreshTitle();
     if (!PT.ads.native && !PT.ads.electron && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => { });
-    let done = false;
+    let done = false, stage = 1;
+    const toGameSplash = () => { if (done || stage !== 1) return; stage = 2; el.splash.classList.add('stage2'); };
     const finish = () => {
       if (done) return; done = true;
-      el.splash.classList.add('out'); show('title'); setTimeout(() => el.splash.remove(), 600);
-      if (store.dailyStatus().can) setTimeout(() => { if (screen === 'title') openModal('missions'); }, 500);
+      el.splash.classList.add('out'); show('title'); setTimeout(() => el.splash.remove(), 700);
+      if (store.dailyStatus().can) setTimeout(() => { if (screen === 'title') openModal('missions'); }, 600);
     };
-    el.splash.addEventListener('pointerdown', finish);
-    setTimeout(finish, 2700);
+    el.splash.addEventListener('pointerdown', () => { if (stage === 1) toGameSplash(); else finish(); });
+    setTimeout(toGameSplash, 2300);   // studio logo, then the game's own splash
+    setTimeout(finish, 5300);
     show('splash');
   }
   window.addEventListener('contextmenu', e => e.preventDefault());

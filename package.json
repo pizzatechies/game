@@ -18,17 +18,18 @@
     "cap:sync": "cap sync android",
     "android:debug": "cap sync android && cd android && ./gradlew assembleDebug",
     "android:release": "cap sync android && cd android && ./gradlew assembleRelease bundleRelease",
-    "dist:win": "electron-builder --win",
-    "dist:linux": "electron-builder --linux",
-    "dist:mac": "electron-builder --mac"
+    "dist:win": "electron-builder --win --publish never",
+    "dist:linux": "electron-builder --linux --publish never",
+    "dist:mac": "electron-builder --mac --publish never",
+    "capacitor:sync:after": "node node_modules/capacitor-levelplay-ads/scripts/levelplay-manifest.js"
   },
   "devDependencies": {
-    "electron": "^44.7.0",
-    "electron-builder": "^26.15.3",
-    "@capacitor-community/admob": "^8.2.1",
     "@capacitor/android": "^8.5.3",
     "@capacitor/cli": "^8.5.3",
-    "@capacitor/core": "^8.5.3"
+    "@capacitor/core": "^8.5.3",
+    "capacitor-levelplay-ads": "^0.1.42",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3"
   },
   "homepage": "https://pizzatechnologies.com",
   "build": {
@@ -49,8 +50,7 @@
         "nsis",
         "portable"
       ],
-      "icon": "build/icon.png",
-      "publisherName": "Pizza Technologies"
+      "icon": "build/icon.png"
     },
     "nsis": {
       "oneClick": false,
@@ -73,5 +73,12 @@
       "category": "public.app-category.games",
       "icon": "build/icon.png"
     }
+  },
+  "levelplay": {
+    "networks": [
+      "unityads"
+    ],
+    "consentProvider": "custom",
+    "userTrackingDescription": "This identifier is used to show you relevant ads and to measure them."
   }
 }

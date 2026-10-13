@@ -30,7 +30,11 @@ jobs:
         with: { node-version: 22, cache: npm }
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
-      - uses: android-actions/setup-android@v3
+      - name: Prepare Android SDK (preinstalled on the runner)
+        run: |
+          SDKM="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-36" "build-tools;36.0.0" || true
       - run: npm ci
       - run: npx cap sync android
 
@@ -47,6 +51,15 @@ jobs:
         id: sign
         env: { KS: '${{ secrets.ANDROID_KEYSTORE_BASE64 }}' }
         run: echo "have=$([ -n "$KS" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      # Release builds (official or throwaway-key check) ship PRODUCTION ad settings: LevelPlay test mode OFF, so the
+      # in-app test tools (Ad test suite, device ad id) are hidden and real ads are requested. The debug APK above keeps test mode ON.
+      - name: Switch to production config (ads test mode OFF) for release builds
+        run: |
+          sed -i "s/testMode: true,/testMode: false,/" www/js/config.js
+          grep -q "testMode: false," www/js/config.js || { echo "testMode was not switched off"; exit 1; }
+          grep -n "testMode" www/js/config.js
+          npx cap sync android
+
       - name: Build signed release APK + AAB
         if: steps.sign.outputs.have == 'true'
         working-directory: android
@@ -65,6 +78,32 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PizzaStack-android-release
+          path: |
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/bundle/release/*.aab
+
+      # No signing secrets yet? Prove the release pipeline (APK + AAB) still builds, using a THROWAWAY key.
+      # These files are NOT official: they cannot be published or updated. Add the 4 secrets (README) for the real thing.
+      - name: Release build check with a throwaway key (not for stores)
+        if: steps.sign.outputs.have != 'true'
+        working-directory: android
+        env:
+          VERSION_CODE: '${{ github.run_number }}'
+          ANDROID_KEYSTORE_PASSWORD: throwaway
+          ANDROID_KEY_ALIAS: throwaway
+          ANDROID_KEY_PASSWORD: throwaway
+        run: |
+          keytool -genkeypair -keystore "$RUNNER_TEMP/throwaway.keystore" -alias throwaway -keyalg RSA -keysize 2048 -validity 30 \
+            -storepass throwaway -keypass throwaway -dname "CN=Pizza Stack throwaway test key"
+          export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/throwaway.keystore"
+          ./gradlew --no-daemon assembleRelease bundleRelease
+          APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          "$APKSIGNER" verify --print-certs app/build/outputs/apk/release/*.apk | head -5
+          ls -la app/build/outputs/apk/release app/build/outputs/bundle/release
+      - if: steps.sign.outputs.have != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: PizzaStack-android-release-THROWAWAY-KEY-NOT-FOR-STORES
           path: |
             android/app/build/outputs/apk/release/*.apk
             android/app/build/outputs/bundle/release/*.aab

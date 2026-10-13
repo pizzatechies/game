@@ -2,7 +2,8 @@
 (function () {
   const PT = window.PT;
   let ctx = null, master = null, sfxGain = null, musicGain = null, noiseBuf = null;
-  let musicTimer = null, step = 0, nextT = 0;
+  const MUSIC_LEVEL = 0.10;       // music bed under the sound effects: ~-31 dBFS RMS, so click/trim/drop stay clear (tools/music-render.js)
+  let musicTimer = null, engine = null, engineCtx = null, stepIdx = 0;
   const S = () => PT.store.get().settings;
 
   function ensure() {
@@ -12,7 +13,7 @@
     ctx = new AC();
     master = ctx.createGain(); master.gain.value = 0.8; master.connect(ctx.destination);
     sfxGain = ctx.createGain(); sfxGain.connect(master);
-    musicGain = ctx.createGain(); musicGain.gain.value = 0.16; musicGain.connect(master);
+    musicGain = ctx.createGain(); musicGain.gain.value = MUSIC_LEVEL; musicGain.connect(master);
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     return ctx;
@@ -41,8 +42,8 @@
   const PENTA = [0, 2, 4, 7, 9];
 
   const sfx = {
-    click() { if (on()) tone(520, 0.06, 'triangle', 0.18); },
-    drop() { if (on()) { tone(150, 0.12, 'sine', 0.5, 0, 60); noise(0.07, 0.12, 1500); } },
+    click() { if (on()) tone(1047, 0.06, 'triangle', 0.3); },
+    drop() { if (on()) { tone(150, 0.12, 'sine', 0.5, 0, 60); noise(0.07, 0.3, 2500); } },
     perfect(combo) {
       if (!on()) return;
       const n = Math.max(0, combo - 1), idx = n % 5, oct = Math.min(2, Math.floor(n / 5));
@@ -50,7 +51,7 @@
       tone(hz(base), 0.28, 'triangle', 0.4);
       tone(hz(base + 12), 0.2, 'sine', 0.16, ctx.currentTime + 0.02);
     },
-    trim() { if (on()) { tone(210, 0.1, 'square', 0.12, 0, 120); } },
+    trim() { if (on()) { tone(1175, 0.1, 'square', 0.14, 0, 660); } },
     coin() { if (on()) { tone(988, 0.07, 'square', 0.1); tone(1319, 0.14, 'square', 0.1, ctx.currentTime + 0.07); } },
     fever() { if (on()) [0, 4, 7, 12, 16].forEach((s, i) => tone(hz(s + 12), 0.25, 'sawtooth', 0.14, ensure().currentTime + i * 0.06)); },
     over() { if (on()) { [7, 4, 0, -5].forEach((s, i) => tone(hz(s), 0.28, 'triangle', 0.35, ensure().currentTime + i * 0.13, hz(s) * 0.9)); noise(0.3, 0.2, 300); } },
@@ -58,30 +59,33 @@
     zone() { if (on()) [0, 7, 12, 19].forEach((s, i) => tone(hz(s + 12), 0.3, 'sine', 0.22, ensure().currentTime + i * 0.09)); }
   };
 
-  /* ---------- music: simple 4-chord loop (bass + arpeggio + hat) ---------- */
-  const CHORDS = [[0, 4, 7], [-3, 0, 4], [-7, -3, 0], [-5, -1, 2]]; // C Am F G (relative)
-  function schedule() {
-    if (!ctx) return;
-    while (nextT < ctx.currentTime + 0.25) {
-      const bar = Math.floor(step / 16) % 4, s16 = step % 16, ch = CHORDS[bar];
-      if (s16 % 4 === 0) tone(hz(ch[0] - 12), 0.22, 'triangle', 0.5, nextT, null, musicGain);
-      if (s16 % 2 === 0) tone(hz(ch[(s16 / 2) % 3] + 12), 0.14, 'square', 0.16, nextT, null, musicGain);
-      if (s16 % 2 === 1) { // hat
-        const s = ctx.createBufferSource(), g = ctx.createGain(), f = ctx.createBiquadFilter();
-        s.buffer = noiseBuf; f.type = 'highpass'; f.frequency.value = 7000;
-        g.gain.setValueAtTime(0.12, nextT); g.gain.exponentialRampToValueAtTime(0.0001, nextT + 0.04);
-        s.connect(f); f.connect(g); g.connect(musicGain); s.start(nextT); s.stop(nextT + 0.05);
-      }
-      nextT += 60 / 132 / 4; step++;
+  /* ---------- music: lofi-pop loop (see music.js / song.js) ---------- */
+  const LOOKAHEAD = 0.45;
+  function tick() {
+    if (!engine || !ctx) return;
+    // schedule every 16th-note step that falls inside the lookahead window
+    let guard = 0;
+    while (engine.timeOf(stepIdx) < ctx.currentTime + LOOKAHEAD && guard++ < 512) {
+      if (engine.timeOf(stepIdx) < ctx.currentTime - 0.1) { stepIdx++; continue; }   // missed step: skip it, do not stack it up
+      engine.scheduleStep(stepIdx++);
     }
   }
   function startMusic() {
-    if (musicTimer || !S().music || !ensure()) return;
-    nextT = ctx.currentTime + 0.05; step = 0;
-    musicTimer = setInterval(schedule, 90);
+    if (musicTimer || !S().music || !ensure() || !PT.music || !PT.songs) return;
+    if (!engine || engineCtx !== ctx) { engine = PT.music.create(ctx, musicGain, PT.songs.lofipop, { seed: 20260101 }); engineCtx = ctx; }
+    stepIdx = 0;
+    engine.start(ctx.currentTime + 0.12);
+    musicTimer = setInterval(tick, 90);
+    tick();
   }
-  function stopMusic() { clearInterval(musicTimer); musicTimer = null; }
+  function stopMusic() {
+    clearInterval(musicTimer); musicTimer = null;
+    if (engine) engine.stop();
+  }
   function syncMusic() { if (S().music) startMusic(); else stopMusic(); }
+  /* Pizza Fever = brighter, busier mix; game over = muffled. */
+  function setEnergy(on) { if (engine) engine.setEnergy(on); }
+  function setMuffle(on) { if (engine) engine.setMuffle(on); }
 
   /* Browsers/WebViews only allow audio after a gesture. */
   function unlock() { ensure(); syncMusic(); }
@@ -93,5 +97,5 @@
 
   function vibrate(ms) { if (PT.store.get().settings.vibe && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* ignore */ } } }
 
-  PT.audio = Object.assign({ ensure, syncMusic, vibrate }, sfx);
+  PT.audio = Object.assign({ ensure, syncMusic, vibrate, setEnergy, setMuffle, musicRunning: () => !!musicTimer, ctxState: () => (ctx ? ctx.state : 'none') }, sfx);
 })();
