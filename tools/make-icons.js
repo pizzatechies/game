@@ -28,7 +28,7 @@ W(path.join(root, 'www/img/icon.svg'), stackIcon());
 
 // ---------- Splash: official logo + wordmark on the dark brand background ----------
 const splashSvg = (w, h) => {
-  const m = Math.min(w, h), s = m * .56;
+  const m = Math.min(w, h), s = m * .4;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}"><rect width="${w}" height="${h}" fill="#1a0f0a"/>
   <image href="${logoUri}" x="${(w - s) / 2}" y="${h / 2 - s * .62}" width="${s}" height="${s}"/>
   <text x="${w / 2}" y="${h / 2 + s * .62}" text-anchor="middle" font-family="Arial Black,Impact,sans-serif" font-size="${m * .06}" fill="#fff4e0" letter-spacing="${m * .012}">PIZZA TECHNOLOGIES</text></svg>`;
