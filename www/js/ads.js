@@ -22,6 +22,7 @@
     categories: [{ id: 'essential', locked: true, order: 0 }, { id: 'marketing', default: false, order: 1 }],
     services: [
       { id: 'pizza-stack', categoryId: 'essential', default: true, company: { name: 'Pizza Technologies' }, description: 'Saves your progress, coins and settings on this device so the game works offline.' },
+      { id: 'levelplay', categoryId: 'marketing', default: false, company: { name: 'Unity Technologies (ironSource)' }, description: 'Unity LevelPlay (formerly ironSource) picks which ad network fills each ad and shows ironSource ads itself (uses your advertising ID).', urls: { privacy: 'https://unity.com/legal/privacy-policy' } },
       { id: 'unity-ads', categoryId: 'marketing', network: 'unityads', default: false, company: { name: 'Unity Technologies' }, description: 'Shows video and full-screen ads and measures them (uses your advertising ID). Declining still lets you play; you may see less relevant ads.', urls: { privacy: 'https://unity.com/legal/privacy-policy' } }
     ]
   };

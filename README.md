@@ -49,7 +49,7 @@ Everything ships in **safe test mode** — Google's public test ad ids, no store
 
 | Channel | Where | What it does | You must |
 |---|---|---|---|
-| **Rewarded video** (Unity LevelPlay) | Android | "Continue" after a game over, "Double coins", free coins in the shop, 2× daily reward. Always optional (the best-paying, best-liked format) | Create a free LevelPlay account + app (unity.com/products/unity-levelplay), enable the *Unity Ads* network, create a **Rewarded** ad unit; paste App Key + ad unit id in `config.js → ads.levelplay`; set `ads.testMode:false` |
+| **Rewarded video** (Unity LevelPlay) | Android | "Continue" after a game over, "Double coins", free coins in the shop, 2× daily reward. Always optional (the best-paying, best-liked format) | Use your LevelPlay (formerly ironSource) account, add Pizza Stack as its own app, create a **Rewarded** ad unit (the ironSource network is built in; *Unity Ads* is optional extra demand); paste App Key + ad unit id in `config.js → ads.levelplay`; set `ads.testMode:false` |
 | **Interstitial** (Unity LevelPlay) | Android | Full-screen ad every 4th run (never in the first runs, never to paying players) | Create an **Interstitial** ad unit and paste its id |
 | **Consent** | Android | A consent dialog (custom, TCF-style) is shown on first launch before any ad loads; players can reopen it from Settings → *Ad & privacy choices* | Put your hosted privacy-policy URL in `ads.levelplay.privacyPolicyUrl`. The dialog is self-built (not an IAB-certified CMP); for audited EU compliance switch the plugin to a certified CMP (`levelplay.consentProvider` in `package.json`) |
 | **AdSense** | Web | Ads in the empty side-panels on wide screens | Get AdSense approval, set `ads.adsenseClient` + `adsenseSlots` |

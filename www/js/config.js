@@ -14,8 +14,9 @@ window.PT.config = {
 
   ads: {
     /* Android ads run through Unity LevelPlay (free to join; it can also mediate AdMob, AppLovin, Meta... later).
-     * Create a free account at https://unity.com/products/unity-levelplay , add the app, enable the "Unity Ads" network, create a
-     * Rewarded and an Interstitial ad unit, then paste the three values below. While appKey is '' the game still works:
+     * LevelPlay IS the former ironSource platform, so an existing ironSource account works. Add THIS game as its own app in the dashboard
+     * (apps are per package id: com.pizzatechnologies.pizzastack), create a Rewarded and an Interstitial ad unit, then paste the values below.
+     * The ironSource ad network is built in; the Unity Ads network is optional extra demand you can switch on later in the dashboard. While appKey is '' the game still works:
      * "watch to earn" falls back to the clearly-labelled sponsor card (nothing is earned). */
     provider: 'levelplay',
     /* true  = LevelPlay test mode (safe while developing, no revenue). false = real ads. */

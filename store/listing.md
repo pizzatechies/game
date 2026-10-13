@@ -67,7 +67,7 @@ Optional line to add under "PLAY ANYWHERE" ONLY once the leaderboard server is d
 
 **Content rating:** no violence, no sexual content, no gambling, no user-generated content, no chat. Players choose a display name that appears on the leaderboard (only when the score server is on). Expect an "Everyone / 3+" style rating. Ads are shown.
 
-**Ads:** yes, this app contains ads (Unity LevelPlay / Unity Ads; interstitials between runs and optional rewarded videos).
+**Ads:** yes, this app contains ads (Unity LevelPlay / ironSource and Unity Ads networks; interstitials between runs and optional rewarded videos).
 
 **In-app purchases:** none in the Android build today (the web/PC purchase links are not part of the app store build). Update this when you add Play Billing or Samsung IAP.
 
