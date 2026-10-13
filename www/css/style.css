@@ -231,3 +231,11 @@ a.lnk{color:var(--teal)}
 #splash.stage2 .sg-by{animation:fadeUp .6s 2.1s both}
 .sg-tap{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);text-align:center;font-size:11px;letter-spacing:4px;color:rgba(255,244,224,.6);opacity:0}
 #splash.stage2 .sg-tap{animation:fadeUp .6s 2.4s both}
+
+/* ---------- waiting for an ad ---------- */
+#adWait{display:none;justify-content:center;background:rgba(10,4,0,.62);backdrop-filter:blur(3px);z-index:9}
+#adWait.show{display:flex}
+.aw-card{display:flex;flex-direction:column;align-items:center;gap:14px;background:linear-gradient(#3b2418,#27150d);border:3px solid #6b4129;border-radius:24px;padding:24px 30px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.aw-txt{font-weight:900;font-size:20px;letter-spacing:1px}
+.aw-spin{width:46px;height:46px;border-radius:50%;border:6px solid rgba(255,244,224,.2);border-top-color:var(--cheese);animation:awspin .9s linear infinite}
+@keyframes awspin{to{transform:rotate(360deg)}}

@@ -9,27 +9,33 @@ const PORT = '8104', sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // Installed before any page script: pretends to be the Capacitor Android runtime with a scriptable LevelPlayAds plugin.
 const FAKE = (cfg) => `(() => {
-  const calls = [], handlers = {}; let ready = { rewarded: false, interstitial: false };
-  const script = { loadRewardedOutcome: 'loaded', showRewardedOutcome: 'reward', showInterOutcome: 'closed' };
+  const calls = [], handlers = {}; let ready = { rewarded: false, interstitial: false }; let lastLoad = { Rewarded: 0, Interstitial: 0 };
+  const script = Object.assign({ loadRewardedOutcome: 'loaded', showRewardedOutcome: 'reward', showInterOutcome: 'closed', loadMs: 20, failLoads: 0, initFails: 0 }, ${JSON.stringify((cfg && cfg.script) || {})});
   const emit = (n, p) => (handlers[n] || []).forEach(f => f(p || {}));
+  // mirrors the real plugin: load() settles only when the ad loaded or failed, and rejects when called again too fast
+  const load = (kind, o) => { calls.push(['load' + kind, o]); const now = Date.now();
+    if (now - lastLoad[kind] < (o.retryInterval == null ? 5000 : o.retryInterval)) return Promise.reject(new Error('Request too fast. Please wait ' + o.retryInterval + 'ms to prevent invalid traffic.'));
+    lastLoad[kind] = now;
+    return new Promise((res, rej) => setTimeout(() => {
+      const fail = (kind === 'Rewarded' && script.loadRewardedOutcome !== 'loaded') || (script.failLoads > 0 && script.failLoads-- > 0);
+      if (fail) { emit('on' + kind + 'AdLoadFailed', { errorCode: 509, errorMessage: 'No ads to show' }); rej(new Error('No ads to show')); }
+      else { ready[kind.toLowerCase()] = true; emit('on' + kind + 'AdLoaded'); res(); }
+    }, script.loadMs)); };
   const plugin = {
     addListener: async (n, f) => { (handlers[n] = handlers[n] || []).push(f); return { remove() {} }; },
     requestConsentInfo: async o => { calls.push(['requestConsentInfo', o]); return { status: 'GRANTED', granted: true, canRequestAds: true }; },
     showPrivacyOptions: async o => { calls.push(['showPrivacyOptions']); return { status: 'GRANTED' }; },
-    initialize: async o => { calls.push(['initialize', o]); return { status: 'INITIALIZED_SUCCESSFULLY' }; },
-    loadRewarded: async o => { calls.push(['loadRewarded', o]); if (script.loadRewardedOutcome === 'loaded') setTimeout(() => { ready.rewarded = true; emit('onRewardedAdLoaded'); }, 20); else setTimeout(() => emit('onRewardedAdLoadFailed'), 20); },
-    isRewardedReady: async () => ({ isReady: ready.rewarded }),
+    initialize: async o => { calls.push(['initialize', o]); if (script.initFails > 0) { script.initFails--; throw new Error('LevelPlay init failed: Invalid app key'); } return { status: 'INITIALIZED_SUCCESSFULLY' }; },
+    loadRewarded: o => load('Rewarded', o), isRewardedReady: async () => ({ isReady: ready.rewarded }),
     showRewarded: async () => { calls.push(['showRewarded']); ready.rewarded = false;
       setTimeout(() => { const o = script.showRewardedOutcome;
         if (o === 'reward') { emit('onRewardedAdRewarded', { rewardName: 'coins', rewardAmount: 1 }); emit('onRewardedAdClosed'); }
-        else if (o === 'dismiss') emit('onRewardedAdClosed'); else if (o === 'fail') emit('onRewardedAdDisplayFailed'); }, 30); },
-    loadInterstitial: async o => { calls.push(['loadInterstitial', o]); setTimeout(() => { ready.interstitial = true; emit('onInterstitialAdLoaded'); }, 20); },
-    isInterstitialReady: async () => ({ isReady: ready.interstitial }),
+        else if (o === 'dismiss') emit('onRewardedAdClosed'); else if (o === 'fail') emit('onRewardedAdDisplayFailed', { errorCode: 1, errorMessage: 'display failed' }); }, 30); },
+    loadInterstitial: o => load('Interstitial', o), isInterstitialReady: async () => ({ isReady: ready.interstitial }),
     showInterstitial: async () => { calls.push(['showInterstitial']); ready.interstitial = false; setTimeout(() => emit('onInterstitialAdClosed'), 30); }
   };
   window.__fake = { calls, script, ready };
   window.Capacitor = { isNativePlatform: () => true, registerPlugin: name => (name === 'LevelPlayAds' ? plugin : {}) };
-  window.__cfg = ${JSON.stringify(cfg)};
 })();`;
 
 (async () => {
@@ -44,7 +50,7 @@ const FAKE = (cfg) => `(() => {
     // serve config.js with the test overrides appended, so ads.js sees them from its very first line
     await c2.route('**/js/config.js', async route => {
       const res = await route.fetch(); let body = await res.text();
-      body += `\nObject.assign(PT.config.ads, { interstitialEveryNGames: 2, firstAfterGames: 0 });` + (keys ? `\nObject.assign(PT.config.ads.levelplay, { appKey: 'TESTAPPKEY', rewardedAdUnitId: '${units.includes('rewarded') ? 'RWD_UNIT' : ''}', interstitialAdUnitId: '${units.includes('interstitial') ? 'INT_UNIT' : ''}', loadWaitMs: 400 });` : `\nObject.assign(PT.config.ads.levelplay, { appKey: '', rewardedAdUnitId: '', interstitialAdUnitId: '' });`);
+      body += `\nObject.assign(PT.config.ads, { interstitialEveryNGames: 2, firstAfterGames: 0 });` + (keys ? `\nObject.assign(PT.config.ads.levelplay, { appKey: 'TESTAPPKEY', rewardedAdUnitId: '${units.includes('rewarded') ? 'RWD_UNIT' : ''}', interstitialAdUnitId: '${units.includes('interstitial') ? 'INT_UNIT' : ''}', loadWaitMs: 1500, retryBaseMs: 100, minLoadGapMs: 40 });` : `\nObject.assign(PT.config.ads.levelplay, { appKey: '', rewardedAdUnitId: '', interstitialAdUnitId: '' });`);
       await route.fulfill({ response: res, body });
     });
     const page = await c2.newPage(); const errs = []; page.on('pageerror', e => errs.push(e.message));
@@ -109,6 +115,48 @@ const FAKE = (cfg) => `(() => {
     await page.evaluate(() => PT.ads.maybeInterstitial()); const nm = await names(page);
     assert.ok(!nm.includes('showInterstitial') && !nm.includes('loadInterstitial'), nm.join(','));
     ok('rewarded-only setup: rewarded ads work, interstitial is skipped cleanly');
+    assert.deepStrictEqual(errs, []); await ctx.close(); }
+
+  const watchWaits = page => page.evaluate(() => { window.__waits = []; PT.bus.on('ads-wait', v => window.__waits.push(v)); window.__toasts = []; PT.bus.on('toast', m => window.__toasts.push(m)); });
+  const status = page => page.evaluate(() => PT.ads.status());
+
+  // 12. SDK start fails twice (e.g. wrong key / no network at launch): retries on its own, shows the real error, then works
+  { const { ctx, page, errs } = await open({ script: { initFails: 2 } });
+    await page.goto(`http://localhost:${PORT}/`);
+    await page.waitForFunction(() => PT.ads.status() && /Invalid app key/.test(PT.ads.status().text), null, { timeout: 4000 });
+    ok('a failed SDK start shows the real reason in "Ad status"');
+    await page.waitForFunction(() => PT.ads.status() && PT.ads.status().state !== 'failed' && PT.ads.status().state !== 'starting', null, { timeout: 6000 });
+    assert.strictEqual(await page.evaluate(() => PT.ads.showRewarded('t')), true); ok('SDK start retries by itself and ads work afterwards (no app restart needed)');
+    assert.deepStrictEqual(errs, []); await ctx.close(); }
+
+  // 13. player taps "watch ad" while the SDK is still (re)starting: loading screen, waits, then plays
+  { const { ctx, page, errs } = await open({ script: { initFails: 1 } });
+    await page.goto(`http://localhost:${PORT}/`); await page.waitForFunction(() => window.PT && PT.ads && PT.bus); await watchWaits(page);
+    assert.strictEqual(await page.evaluate(() => PT.ads.showRewarded('t')), true);
+    assert.deepStrictEqual(await page.evaluate(() => window.__waits), [true, false]); ok('tap during startup: "Loading video…" shown, waits for the SDK, then the video plays');
+    assert.deepStrictEqual(errs, []); await ctx.close(); }
+
+  // 14. slow network: the video takes ~0.7 s to load
+  { const { ctx, page, errs } = await open({ script: { loadMs: 700 } });
+    await page.goto(`http://localhost:${PORT}/`); await page.waitForFunction(() => PT.ads.status() && PT.ads.status().state !== 'starting'); await watchWaits(page);
+    const t0 = Date.now(); assert.strictEqual(await page.evaluate(() => PT.ads.showRewarded('t')), true);
+    assert.ok((await page.evaluate(() => window.__waits)).includes(true)); ok('slow load: shows "Loading video…" and plays as soon as it is ready (' + (Date.now() - t0) + ' ms)');
+    assert.deepStrictEqual(errs, []); await ctx.close(); }
+
+  // 15. no fill at all: gives up quickly, tells the player, and the exact error is visible in Settings
+  { const { ctx, page, errs } = await open({ script: { failLoads: 9999 } });
+    await page.goto(`http://localhost:${PORT}/`); await page.waitForFunction(() => PT.ads.status() && PT.ads.status().state === 'failed', null, { timeout: 5000 }); await watchWaits(page);
+    const t0 = Date.now(); assert.strictEqual(await page.evaluate(() => PT.ads.showRewarded('t')), false); const dt = Date.now() - t0;
+    assert.ok(dt < 2500, 'took ' + dt); assert.ok((await page.evaluate(() => window.__toasts)).some(m => /No video available/.test(m)));
+    assert.ok(/509/.test((await status(page)).text) && /No ads to show/.test((await status(page)).text)); ok('no fill: fails in ' + dt + ' ms with a message, error code visible in Ad status');
+    assert.deepStrictEqual(errs, []); await ctx.close(); }
+
+  // 16. Cancel on the loading screen
+  { const { ctx, page, errs } = await open({ script: { loadMs: 6000 } });
+    await page.goto(`http://localhost:${PORT}/`); await page.waitForFunction(() => PT.ads.status() && PT.ads.status().state !== 'starting'); await watchWaits(page);
+    await page.evaluate(() => { window.__p = PT.ads.showRewarded('t'); setTimeout(() => PT.ads.cancelWait(), 200); });
+    const t0 = Date.now(); assert.strictEqual(await page.evaluate(() => window.__p), false); assert.ok(Date.now() - t0 < 1500);
+    assert.deepStrictEqual(await page.evaluate(() => window.__waits), [true, false]); ok('Cancel stops the wait at once and gives no reward');
     assert.deepStrictEqual(errs, []); await ctx.close(); }
 
   console.log(`\nAll ${n} ad checks passed`);

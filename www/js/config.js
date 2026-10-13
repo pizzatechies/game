@@ -26,7 +26,9 @@ window.PT.config = {
       rewardedAdUnitId: '7wt218p2yqfo9hvb',   // Ad Units -> Rewarded -> ad unit id
       interstitialAdUnitId: '',   // Ad Units -> Interstitial -> ad unit id
       privacyPolicyUrl: '',       // PUBLIC https URL of your hosted privacy policy (shown in the consent dialog)
-      loadWaitMs: 4000            // how long "watch ad" waits for a video to load before giving up
+      loadWaitMs: 10000,          // how long "watch ad" waits for a video to load before giving up
+      retryBaseMs: 3000,          // after a failed load, retry after this long (then 6 s, 12 s ... up to 60 s)
+      minLoadGapMs: 2500          // minimum gap between load requests (protects the account from invalid-traffic flags)
     },
     /* Show a full-screen ad after every Nth finished run (never before `firstAfterGames`). */
     interstitialEveryNGames: 4,

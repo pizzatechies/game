@@ -10,12 +10,37 @@
   // real ad network on this device? needs the app key AND at least one ad unit id; each format also needs its own unit id
   const configured = native && !!lpc.appKey && !!(lpc.rewardedAdUnitId || lpc.interstitialAdUnitId);
 
-  let LP = null, ready = false, rewardEarned = false;
-  let rewardedLoaded = false, interLoaded = false, rewardedClosed = null, interClosed = null;
-
+  let LP = null, ready = false, rewardEarned = false, cancelled = false;
   const adsOff = () => { const s = PT.store.get(); return s.adsRemoved || s.pass; };
   const sleep = ms => new Promise(r => setTimeout(r, ms));
-  async function waitFor(test, ms) { const end = Date.now() + ms; while (!test() && Date.now() < end) await sleep(60); return test(); }
+  const gap = lpc.minLoadGapMs || 2500, retryBase = lpc.retryBaseMs || 3000;
+  const short = e => { const m = String((e && (e.errorMessage || e.message)) || e || '').trim(); const c = e && e.errorCode != null ? e.errorCode + ': ' : ''; return (c + m).slice(0, 90); };
+
+  /* One "slot" per ad format. It tracks loaded/loading/failed from the plugin's own events, retries failed loads with a
+   * growing delay (a new ad unit often has no fill for a while), and remembers the last error so Settings can show it. */
+  function Slot(kind, unitId) {
+    const sl = { kind, unitId, loaded: false, loading: false, fails: 0, lastError: '', timer: null, closed: null };
+    sl.schedule = (ms) => { clearTimeout(sl.timer); sl.timer = setTimeout(sl.load, ms != null ? ms : Math.min(60000, retryBase * Math.pow(2, Math.max(0, sl.fails - 1)))); };
+    sl.load = () => {
+      if (!LP || !unitId || sl.loaded || sl.loading) return Promise.resolve();
+      sl.loading = true;
+      return LP['load' + kind]({ adUnitId: unitId, retryInterval: gap }).then(() => { /* the Loaded event sets state */ }, (e) => {
+        const m = String((e && e.message) || e || '');
+        if (/superseded/i.test(m)) return;                                  // a newer load replaced it: that one reports
+        sl.loading = false;
+        if (/too fast/i.test(m)) { sl.schedule(gap + 200); return; }          // our own throttle: simply try again a moment later
+        if (!sl.lastError) sl.lastError = short(e);
+      });
+    };
+    sl.listen = () => {
+      LP.addListener(`on${kind}AdLoaded`, () => { sl.loaded = true; sl.loading = false; sl.fails = 0; sl.lastError = ''; clearTimeout(sl.timer); });
+      LP.addListener(`on${kind}AdLoadFailed`, (e) => { sl.loaded = false; sl.loading = false; sl.fails++; sl.lastError = short(e); sl.schedule(); });
+      LP.addListener(`on${kind}AdDisplayFailed`, (e) => { sl.loaded = false; sl.lastError = short(e); if (sl.closed) sl.closed(); sl.schedule(500); });
+      LP.addListener(`on${kind}AdClosed`, () => { sl.loaded = false; if (sl.closed) sl.closed(); sl.schedule(gap + 300); });   // the plugin auto-reloads too; this is the safety net
+    };
+    return sl;
+  }
+  let rewarded = null, inter = null;
 
   /* What the consent dialog shows (Unity LevelPlay "custom" consent provider). Only the networks listed in package.json
    * ("levelplay.networks") are mediated; add services here when you add networks. */
@@ -29,33 +54,53 @@
   };
   const consentOptions = () => ({ services: CONSENT, appName: cfg.game, accentColor: '#ff5d3a', networks: ['unityads'], privacyPolicyUrl: lpc.privacyPolicyUrl || undefined });
 
+  let stage = 'idle', initError = '', initFails = 0, starting = null, initTimer = null, listening = false;
+  /* Starts the ad SDK: consent -> initialize -> first load. If anything fails it retries by itself (growing delay), so one
+   * hiccup at launch (no network yet, SDK busy...) never leaves ads dead until the app is restarted. */
+  function startAds() {
+    if (ready) return Promise.resolve();
+    if (starting) return starting;
+    starting = (async () => {
+      try {
+        LP = LP || Capacitor.registerPlugin('LevelPlayAds');
+        rewarded = rewarded || Slot('Rewarded', lpc.rewardedAdUnitId); inter = inter || Slot('Interstitial', lpc.interstitialAdUnitId);
+        if (!listening) { listening = true; rewarded.listen(); inter.listen(); LP.addListener('onRewardedAdRewarded', () => { rewardEarned = true; }); }
+        stage = 'consent';     // the plugin shows a native privacy dialog on the very first launch and waits for the answer
+        await LP.requestConsentInfo(consentOptions());
+        stage = 'initialize';
+        await LP.initialize({ appKey: lpc.appKey, isTesting: !!ad.testMode, userId: PT.store.get().id });
+        ready = true; stage = 'ready'; initError = ''; initFails = 0;
+        rewarded.load(); if (!adsOff()) inter.load();
+      } catch (e) {
+        ready = false; initFails++; initError = stage + ': ' + short(e);
+        console.warn('[ads] start failed', initError);
+        clearTimeout(initTimer); initTimer = setTimeout(startAds, Math.min(60000, retryBase * Math.pow(2, Math.min(initFails, 5))));
+      } finally { starting = null; }
+    })();
+    return starting;
+  }
   async function init() {
     if (!native) { setupWebAds(); return; }
     if (!configured) { console.info('[ads] LevelPlay app key / ad unit ids not set - using the sponsor card for "watch to earn"'); return; }
-    try {
-      LP = Capacitor.registerPlugin('LevelPlayAds');
-      LP.addListener('onRewardedAdLoaded', () => { rewardedLoaded = true; });
-      LP.addListener('onRewardedAdLoadFailed', () => { rewardedLoaded = false; });
-      LP.addListener('onRewardedAdRewarded', () => { rewardEarned = true; });
-      LP.addListener('onRewardedAdDisplayFailed', () => { rewardedLoaded = false; if (rewardedClosed) rewardedClosed(); });
-      LP.addListener('onRewardedAdClosed', () => { rewardedLoaded = false; if (rewardedClosed) rewardedClosed(); });
-      LP.addListener('onInterstitialAdLoaded', () => { interLoaded = true; });
-      LP.addListener('onInterstitialAdLoadFailed', () => { interLoaded = false; });
-      LP.addListener('onInterstitialAdDisplayFailed', () => { interLoaded = false; if (interClosed) interClosed(); });
-      LP.addListener('onInterstitialAdClosed', () => { interLoaded = false; if (interClosed) interClosed(); });
-      // Order matters (plugin contract): consent decision first, then initialize, then load.
-      await LP.requestConsentInfo(consentOptions());
-      await LP.initialize({ appKey: lpc.appKey, isTesting: !!ad.testMode, userId: PT.store.get().id });
-      ready = true;
-      loadRewarded(); if (!adsOff()) loadInterstitial();
-    } catch (e) { console.warn('[ads] LevelPlay unavailable', e); LP = null; ready = false; }
+    startAds();
   }
-  const loadRewarded = () => (LP && lpc.rewardedAdUnitId ? LP.loadRewarded({ adUnitId: lpc.rewardedAdUnitId }).catch(() => { rewardedLoaded = false; }) : Promise.resolve());
-  const loadInterstitial = () => (LP && lpc.interstitialAdUnitId ? LP.loadInterstitial({ adUnitId: lpc.interstitialAdUnitId }).catch(() => { interLoaded = false; }) : Promise.resolve());
 
   /* The player can re-open the consent choices from Settings (required for privacy compliance). */
   const hasPrivacyOptions = () => !!(LP && ready);
   async function showPrivacyOptions() { if (LP) { try { await LP.showPrivacyOptions(consentOptions()); } catch (e) { /* closed */ } } }
+
+  /* A one-line summary for Settings, so a slow or failing ad can be diagnosed from a phone. */
+  function status() {
+    if (!native || !configured) return null;
+    if (!ready) {
+      if (initError) return { state: 'failed', text: 'Ads could not start (' + initError + ') - retrying' + (initFails > 1 ? ` · tried ${initFails}x` : '') };
+      return { state: 'starting', text: stage === 'consent' ? 'Waiting for your privacy choice…' : 'Ads are starting…' };
+    }
+    if (rewarded.loaded) return { state: 'ready', text: 'Rewarded video: ready' };
+    if (rewarded.loading) return { state: 'loading', text: 'Rewarded video: loading…' };
+    return { state: 'failed', text: 'Rewarded video: not available yet' + (rewarded.lastError ? ' (' + rewarded.lastError + ')' : '') + (rewarded.fails ? ` · tried ${rewarded.fails}x` : '') };
+  }
+  const cancelWait = () => { cancelled = true; };
 
   /* ---------- web / PC ---------- */
   function setupWebAds() {
@@ -89,22 +134,42 @@
   /* Resolves true if the player earned the reward. */
   async function showRewarded(reason) {
     if (!native || !configured || !lpc.rewardedAdUnitId) return houseAd(reason || 'A message from Pizza Technologies');
-    if (!LP || !ready) { PT.bus.emit('toast', 'Ads are still loading - try again soon'); return false; }
     try {
-      if (!(await LP.isRewardedReady()).isReady) {
-        rewardedLoaded = false;
-        await loadRewarded();
-        if (!(await waitFor(() => rewardedLoaded, lpc.loadWaitMs || 4000))) { PT.bus.emit('toast', 'No video available right now - try again soon'); return false; }
+      if (!ready) {                                    // the SDK has not finished starting: help it along and wait for it
+        cancelled = false; PT.bus.emit('ads-wait', true);
+        clearTimeout(initTimer); startAds();
+        const end0 = Date.now() + (lpc.loadWaitMs || 10000);
+        while (!cancelled && !ready && (stage === 'consent' || Date.now() < end0)) {   // never time out while the privacy dialog is open
+          if (!starting && !initTimer) startAds();
+          await sleep(80);
+        }
+        PT.bus.emit('ads-wait', false);
+        if (cancelled) { cancelled = false; return false; }
+        if (!ready) { PT.bus.emit('toast', 'Ads could not start' + (initError ? ' (' + initError.slice(0, 60) + ')' : '') + ' - retrying'); return false; }
+      }
+      let isReady = (await LP.isRewardedReady()).isReady;
+      if (!isReady) {                                  // not loaded yet: show progress, push a load now and wait for it
+        cancelled = false; PT.bus.emit('ads-wait', true);
+        rewarded.loaded = false; clearTimeout(rewarded.timer); rewarded.load();
+        const end = Date.now() + (lpc.loadWaitMs || 10000);
+        while (!cancelled && Date.now() < end && !rewarded.loaded) {
+          if (rewarded.fails >= 2 && !rewarded.loading) break;          // two failures in a row: stop waiting, tell the player why
+          if (!rewarded.loading && !rewarded.timer) rewarded.load();
+          await sleep(80);
+        }
+        PT.bus.emit('ads-wait', false);
+        isReady = rewarded.loaded;
+        if (cancelled) { cancelled = false; return false; }
+        if (!isReady) { PT.bus.emit('toast', 'No video available right now - try again in a moment'); return false; }
       }
       rewardEarned = false;
-      const closed = new Promise(res => { rewardedClosed = res; });
+      const closed = new Promise(res => { rewarded.closed = res; });
       await LP.showRewarded();
       await Promise.race([closed, sleep(180000)]);          // safety net: never hang the game forever
-      rewardedClosed = null;
+      rewarded.closed = null;
       const ok = rewardEarned; rewardEarned = false;
-      loadRewarded();                                       // preload the next one
-      return ok;
-    } catch (e) { rewardedClosed = null; PT.bus.emit('toast', 'No video available right now - try again soon'); loadRewarded(); return false; }
+      return ok;                                            // the plugin reloads the next video by itself
+    } catch (e) { PT.bus.emit('ads-wait', false); if (rewarded) { rewarded.closed = null; rewarded.lastError = short(e); rewarded.loaded = false; rewarded.schedule(1500); } PT.bus.emit('toast', 'No video available right now - try again in a moment'); return false; }
   }
 
   /* Called when a new run starts. Never shown for the first runs or to paying players. */
@@ -112,17 +177,16 @@
     const st = PT.store.get();
     st.gamesSinceAd++; PT.store.save();
     if (adsOff() || st.games < ad.firstAfterGames || st.gamesSinceAd < ad.interstitialEveryNGames) return;
-    if (!(LP && ready) || !lpc.interstitialAdUnitId) return;
+    if (!(LP && ready) || !lpc.interstitialAdUnitId) { if (!ready && configured) startAds(); return; }
     try {
-      if (!(await LP.isInterstitialReady()).isReady) { loadInterstitial(); return; }
+      if (!(await LP.isInterstitialReady()).isReady) { inter.load(); return; }
       st.gamesSinceAd = 0; PT.store.save();
-      const closed = new Promise(res => { interClosed = res; });
+      const closed = new Promise(res => { inter.closed = res; });
       await LP.showInterstitial();
       await Promise.race([closed, sleep(120000)]);
-      interClosed = null;
-      loadInterstitial();
-    } catch (e) { interClosed = null; }
+      inter.closed = null;
+    } catch (e) { inter.closed = null; inter.schedule(1500); }
   }
 
-  PT.ads = { init, showRewarded, maybeInterstitial, native, adsOff, electron, configured, hasPrivacyOptions, showPrivacyOptions };
+  PT.ads = { init, showRewarded, maybeInterstitial, native, adsOff, electron, configured, hasPrivacyOptions, showPrivacyOptions, status, cancelWait };
 })();
