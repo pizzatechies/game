@@ -160,9 +160,14 @@ jobs:
           PROFILE: ${{ secrets.IOS_PROFILE_BASE64 }}
           TEAM: ${{ secrets.APPLE_TEAM_ID }}
           ASC_KEY: ${{ secrets.ASC_KEY_P8_BASE64 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
-          echo "have=$([ -n "$P12" ] && [ -n "$PROFILE" ] && [ -n "$TEAM" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "upload=$([ -n "$ASC_KEY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          HAVE=$([ -n "$P12" ] && [ -n "$PROFILE" ] && [ -n "$TEAM" ] && echo true || echo false)
+          UPLOAD=$([ -n "$ASC_KEY" ] && [ -n "$ASC_KEY_ID" ] && [ -n "$ASC_ISSUER_ID" ] && echo true || echo false)
+          echo "have=$HAVE" >> "$GITHUB_OUTPUT"
+          echo "upload=$UPLOAD" >> "$GITHUB_OUTPUT"
+          if [ "$HAVE" != true ]; then echo "::notice title=iOS signing::No Apple signing secrets are set, so only the UNSIGNED test IPA was built. See the iOS section of README.md to get the App Store build."; fi
       # The release ships PRODUCTION ad settings (LevelPlay test mode OFF), exactly like the Android release.
       - name: Switch to production config (ads test mode OFF)
         if: steps.sign.outputs.have == 'true'
@@ -233,8 +238,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: PizzaStack-ios-appstore-ipa, path: PizzaStack-ios-appstore.ipa }
       # Optional: send the IPA straight to App Store Connect / TestFlight (needs the 3 ASC_* secrets). Without them, upload the IPA with Apple's Transporter app.
+      # Runs only for main, release tags and manual runs, so ordinary branch pushes do not each create a TestFlight build.
       - name: Upload to App Store Connect (TestFlight)
-        if: steps.sign.outputs.have == 'true' && steps.sign.outputs.upload == 'true'
+        if: steps.sign.outputs.have == 'true' && steps.sign.outputs.upload == 'true' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
         shell: bash
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -243,7 +249,13 @@ jobs:
         run: |
           mkdir -p "$HOME/.private_keys"
           echo "$ASC_KEY" | base64 -d > "$HOME/.private_keys/AuthKey_${ASC_KEY_ID}.p8"
-          xcrun altool --upload-app --type ios --file PizzaStack-ios-appstore.ipa --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+          # altool can print an error and still exit 0 on newer Xcode, so read its output instead of trusting the exit status alone
+          set +e
+          xcrun altool --upload-app --type ios --file PizzaStack-ios-appstore.ipa --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee "$RUNNER_TEMP/altool.log"
+          RC=${PIPESTATUS[0]}
+          set -e
+          if [ "$RC" != 0 ] || grep -Eiq 'UPLOAD FAILED|\*\*\* Error|ERROR ITMS|error:' "$RUNNER_TEMP/altool.log"; then echo "::error::The upload to App Store Connect failed - see the log above."; exit 1; fi
+          grep -q "No errors uploading" "$RUNNER_TEMP/altool.log" || echo "::warning::Could not confirm the upload from altool's output. Check App Store Connect > TestFlight before assuming it arrived."
       - name: Remove signing material from the runner
         if: always() && steps.sign.outputs.have == 'true'
         run: |
@@ -278,7 +290,8 @@ jobs:
             dist/*.dmg
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    # iOS is listed in needs so its artifacts are available, but an iOS failure must not block the Android + desktop release
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') && needs.android.result == 'success' && needs.desktop.result == 'success' }}
     needs: [android, ios, desktop]
     runs-on: ubuntu-latest
     steps:
