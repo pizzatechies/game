@@ -18,7 +18,7 @@
     if (typeof Capacitor.nativePromise !== 'function') throw new Error('Capacitor bridge is missing nativePromise');
     const call = m => o => Capacitor.nativePromise('LevelPlayAds', m, o || {});
     const out = { addListener: (n, cb) => Capacitor.addListener('LevelPlayAds', n, cb) };
-    ['requestConsentInfo', 'showPrivacyOptions', 'initialize', 'loadRewarded', 'isRewardedReady', 'showRewarded', 'loadInterstitial', 'isInterstitialReady', 'showInterstitial']
+    ['requestConsentInfo', 'showPrivacyOptions', 'initialize', 'loadRewarded', 'isRewardedReady', 'showRewarded', 'loadInterstitial', 'isInterstitialReady', 'showInterstitial', 'launchTestSuite', 'getAdvertisingId']
       .forEach(m => { out[m] = call(m); });
     return out;
   }
@@ -110,6 +110,11 @@
   }
   const cancelWait = () => { cancelled = true; };
 
+  /* Test-build helpers (shown in Settings while ads.testMode is on): LevelPlay's own Test Suite shows which ad networks are
+   * integrated and lets you load a test ad per network; the device advertising ID is what the dashboard needs to register a test device. */
+  async function launchTestSuite() { if (LP && ready) { try { await LP.launchTestSuite(); } catch (e) { PT.bus.emit('toast', 'Test suite unavailable: ' + short(e)); } } }
+  async function deviceAdId() { if (!(LP && ready)) return null; try { const r = await LP.getAdvertisingId(); return r && r.id ? r.id + (r.limited ? ' (ad tracking limited)' : '') : null; } catch (e) { return null; } }
+
   /* ---------- web / PC ---------- */
   function setupWebAds() {
     if (electron || !ad.adsenseClient) return;
@@ -196,5 +201,5 @@
     } catch (e) { inter.closed = null; inter.schedule(1500); }
   }
 
-  PT.ads = { init, showRewarded, maybeInterstitial, native, adsOff, electron, configured, hasPrivacyOptions, showPrivacyOptions, status, cancelWait };
+  PT.ads = { init, showRewarded, maybeInterstitial, native, adsOff, electron, configured, hasPrivacyOptions, showPrivacyOptions, status, cancelWait, launchTestSuite, deviceAdId };
 })();

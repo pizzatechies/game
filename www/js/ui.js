@@ -290,6 +290,11 @@
     const inp = mk('input', 'txt'); inp.maxLength = 16; inp.value = st.name; inp.addEventListener('change', () => { const v = inp.value.replace(/[<>]/g, '').trim().slice(0, 16); st.name = v || st.name; inp.value = st.name; store.save(); });
     inp.addEventListener('keydown', e => e.stopPropagation()); body.appendChild(inp);
     const adst = PT.ads.status(); if (adst) { const n = mk('div', 'note'); n.textContent = 'Ad status: ' + adst.text; n.style.userSelect = 'text'; body.appendChild(n); }
+    if (adst && cfg.ads.testMode) {                         // test builds only: tools for setting up ads in the LevelPlay dashboard
+      const ts = mk('button', 'btn ghost', 'Open ad test suite'); ts.onclick = () => { click(); PT.ads.launchTestSuite(); }; body.appendChild(ts);
+      const idn = mk('div', 'note'); idn.style.userSelect = 'text'; idn.textContent = 'Device ad ID (for LevelPlay test devices): …'; body.appendChild(idn);
+      PT.ads.deviceAdId().then(id => { idn.textContent = 'Device ad ID (for LevelPlay test devices): ' + (id || 'not available yet'); });
+    }
     if (PT.ads.hasPrivacyOptions()) { const b = mk('button', 'btn ghost', 'Ad &amp; privacy choices'); b.onclick = () => { click(); PT.ads.showPrivacyOptions(); }; body.appendChild(b); }
     if (installPrompt) { const b = mk('button', 'btn ghost', 'Install on this device'); b.onclick = async () => { installPrompt.prompt(); installPrompt = null; closeModal(); }; body.appendChild(b); }
     const a = mk('div', 'about', `<img src="img/pt-logo.png" alt="Pizza Technologies logo"><p class="note">Pizza Stack v${cfg.version}<br>A game by <b>${cfg.studio}</b><br><a class="lnk" href="${cfg.privacyUrl}" target="_blank" rel="noopener">Privacy Policy</a> &middot; <a class="lnk" href="mailto:${cfg.supportEmail}">Support</a></p><p class="note" style="font-size:11px">Player ID: ${st.id.slice(0, 8)}</p>`);

@@ -25,6 +25,8 @@ const FAKE = (cfg) => `(() => {
     addListener: async (n, f) => { (handlers[n] = handlers[n] || []).push(f); return { remove() {} }; },
     requestConsentInfo: async o => { calls.push(['requestConsentInfo', o]); return { status: 'GRANTED', granted: true, canRequestAds: true }; },
     showPrivacyOptions: async o => { calls.push(['showPrivacyOptions']); return { status: 'GRANTED' }; },
+    launchTestSuite: async () => { calls.push(['launchTestSuite']); },
+    getAdvertisingId: async () => ({ id: '11111111-2222-3333-4444-555555555555', limited: false }),
     initialize: async o => { calls.push(['initialize', o]); if (script.initFails > 0) { script.initFails--; throw new Error('LevelPlay init failed: Invalid app key'); } return { status: 'INITIALIZED_SUCCESSFULLY' }; },
     loadRewarded: o => load('Rewarded', o), isRewardedReady: async () => ({ isReady: ready.rewarded }),
     showRewarded: async () => { calls.push(['showRewarded']); ready.rewarded = false;
@@ -160,6 +162,13 @@ const FAKE = (cfg) => `(() => {
     await page.evaluate(() => { window.__p = PT.ads.showRewarded('t'); setTimeout(() => PT.ads.cancelWait(), 200); });
     const t0 = Date.now(); assert.strictEqual(await page.evaluate(() => window.__p), false); assert.ok(Date.now() - t0 < 1500);
     assert.deepStrictEqual(await page.evaluate(() => window.__waits), [true, false]); ok('Cancel stops the wait at once and gives no reward');
+    assert.deepStrictEqual(errs, []); await ctx.close(); }
+
+  // 19. test-build helpers: LevelPlay Test Suite + the device advertising id for the dashboard's test-device list
+  { const { ctx, page, errs } = await open();
+    await page.goto(`http://localhost:${PORT}/`); await page.waitForFunction(() => PT.ads.status() && PT.ads.status().state !== 'starting');
+    await page.evaluate(() => PT.ads.launchTestSuite()); assert.ok((await names(page)).includes('launchTestSuite'));
+    assert.strictEqual(await page.evaluate(() => PT.ads.deviceAdId()), '11111111-2222-3333-4444-555555555555'); ok('Test Suite opens and the device advertising id is available (for LevelPlay test devices)');
     assert.deepStrictEqual(errs, []); await ctx.close(); }
 
   console.log(`\nAll ${n} ad checks passed`);
