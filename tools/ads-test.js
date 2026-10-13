@@ -37,14 +37,14 @@ const FAKE = (cfg) => `(() => {
   await sleep(700);
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || '/opt/pw-browsers/chromium' });
   let n = 0; const ok = s => console.log('  ok', ++n, s);
-  async function open(cfg, { keys = true, save = {} } = {}) {
+  async function open(cfg, { keys = true, units = ['rewarded', 'interstitial'], save = {} } = {}) {
     const c2 = await browser.newContext({ viewport: { width: 390, height: 844 } });
     await c2.addInitScript(FAKE(cfg || {}));
     await c2.addInitScript(save0 => { localStorage.setItem('pt_pizzastack_v1', JSON.stringify(Object.assign({ v: 1, id: 'ads-test-player-0001', tutorialDone: true, daily: { last: '2999-01-01', streak: 1 } }, save0))); }, save);
     // serve config.js with the test overrides appended, so ads.js sees them from its very first line
     await c2.route('**/js/config.js', async route => {
       const res = await route.fetch(); let body = await res.text();
-      body += `\nObject.assign(PT.config.ads, { interstitialEveryNGames: 2, firstAfterGames: 0 });` + (keys ? `\nObject.assign(PT.config.ads.levelplay, { appKey: 'TESTAPPKEY', rewardedAdUnitId: 'RWD_UNIT', interstitialAdUnitId: 'INT_UNIT', loadWaitMs: 400 });` : '');
+      body += `\nObject.assign(PT.config.ads, { interstitialEveryNGames: 2, firstAfterGames: 0 });` + (keys ? `\nObject.assign(PT.config.ads.levelplay, { appKey: 'TESTAPPKEY', rewardedAdUnitId: '${units.includes('rewarded') ? 'RWD_UNIT' : ''}', interstitialAdUnitId: '${units.includes('interstitial') ? 'INT_UNIT' : ''}', loadWaitMs: 400 });` : `\nObject.assign(PT.config.ads.levelplay, { appKey: '', rewardedAdUnitId: '', interstitialAdUnitId: '' });`);
       await route.fulfill({ response: res, body });
     });
     const page = await c2.newPage(); const errs = []; page.on('pageerror', e => errs.push(e.message));
@@ -92,6 +92,23 @@ const FAKE = (cfg) => `(() => {
     await page.evaluate(() => { PT.config.ads.houseAdSeconds = 1; window.__r = PT.ads.showRewarded('t'); });
     await page.waitForSelector('#houseAd.show'); await page.waitForFunction(() => !document.querySelector('.ha-close').disabled, null, { timeout: 4000 }); await page.click('.ha-close');
     assert.strictEqual(await page.evaluate(() => window.__r), true); ok('no app key yet -> sponsor card fallback, ad SDK never touched');
+    assert.deepStrictEqual(errs, []); await ctx.close(); }
+
+  // 10. app key but NO ad unit ids yet: sponsor card, no consent dialog, no SDK calls
+  { const { ctx, page, errs } = await open({}, { keys: true, units: [] });
+    await page.goto(`http://localhost:${PORT}/`); await page.waitForTimeout(800);
+    assert.deepStrictEqual(await names(page), []); assert.strictEqual(await page.evaluate(() => PT.ads.configured), false);
+    ok('app key without ad units -> no consent dialog / SDK calls, sponsor card stays in use');
+    assert.deepStrictEqual(errs, []); await ctx.close(); }
+
+  // 11. only a rewarded unit configured: rewarded is real, interstitial never touches the SDK
+  { const { ctx, page, errs } = await open({}, { keys: true, units: ['rewarded'] });
+    await page.goto(`http://localhost:${PORT}/`); await page.waitForFunction(() => __fake.calls.some(c => c[0] === 'loadRewarded'), null, { timeout: 8000 });
+    assert.strictEqual(await page.evaluate(() => PT.ads.showRewarded('t')), true);
+    await page.evaluate(() => { __fake.calls.length = 0; const s = PT.store.get(); s.games = 9; s.gamesSinceAd = 99; });
+    await page.evaluate(() => PT.ads.maybeInterstitial()); const nm = await names(page);
+    assert.ok(!nm.includes('showInterstitial') && !nm.includes('loadInterstitial'), nm.join(','));
+    ok('rewarded-only setup: rewarded ads work, interstitial is skipped cleanly');
     assert.deepStrictEqual(errs, []); await ctx.close(); }
 
   console.log(`\nAll ${n} ad checks passed`);

@@ -7,7 +7,8 @@
   const PT = window.PT, cfg = PT.config, ad = cfg.ads, lpc = ad.levelplay || {};
   const native = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
   const electron = /Electron/i.test(navigator.userAgent);
-  const configured = native && !!lpc.appKey;       // real ad network on this device?
+  // real ad network on this device? needs the app key AND at least one ad unit id; each format also needs its own unit id
+  const configured = native && !!lpc.appKey && !!(lpc.rewardedAdUnitId || lpc.interstitialAdUnitId);
 
   let LP = null, ready = false, rewardEarned = false;
   let rewardedLoaded = false, interLoaded = false, rewardedClosed = null, interClosed = null;
@@ -30,7 +31,7 @@
 
   async function init() {
     if (!native) { setupWebAds(); return; }
-    if (!configured) { console.info('[ads] LevelPlay app key not set - using the sponsor card for "watch to earn"'); return; }
+    if (!configured) { console.info('[ads] LevelPlay app key / ad unit ids not set - using the sponsor card for "watch to earn"'); return; }
     try {
       LP = Capacitor.registerPlugin('LevelPlayAds');
       LP.addListener('onRewardedAdLoaded', () => { rewardedLoaded = true; });
@@ -87,7 +88,7 @@
 
   /* Resolves true if the player earned the reward. */
   async function showRewarded(reason) {
-    if (!native || !configured) return houseAd(reason || 'A message from Pizza Technologies');
+    if (!native || !configured || !lpc.rewardedAdUnitId) return houseAd(reason || 'A message from Pizza Technologies');
     if (!LP || !ready) { PT.bus.emit('toast', 'Ads are still loading - try again soon'); return false; }
     try {
       if (!(await LP.isRewardedReady()).isReady) {
@@ -111,7 +112,7 @@
     const st = PT.store.get();
     st.gamesSinceAd++; PT.store.save();
     if (adsOff() || st.games < ad.firstAfterGames || st.gamesSinceAd < ad.interstitialEveryNGames) return;
-    if (!(LP && ready)) return;
+    if (!(LP && ready) || !lpc.interstitialAdUnitId) return;
     try {
       if (!(await LP.isInterstitialReady()).isReady) { loadInterstitial(); return; }
       st.gamesSinceAd = 0; PT.store.save();
