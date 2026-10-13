@@ -23,7 +23,7 @@ window.PT.config = {
     testMode: true,
     levelplay: {
       appKey: '28acf210d',        // LevelPlay dashboard -> your app -> App key (not a secret: it ships inside the app)
-      rewardedAdUnitId: '',       // Ad Units -> Rewarded -> ad unit id
+      rewardedAdUnitId: '7wt218p2yqfo9hvb',   // Ad Units -> Rewarded -> ad unit id
       interstitialAdUnitId: '',   // Ad Units -> Interstitial -> ad unit id
       privacyPolicyUrl: '',       // PUBLIC https URL of your hosted privacy policy (shown in the consent dialog)
       loadWaitMs: 4000            // how long "watch ad" waits for a video to load before giving up
