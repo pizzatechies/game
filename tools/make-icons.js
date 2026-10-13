@@ -1,4 +1,4 @@
-// Renders all PNG icons/splash screens for web, PWA, Android and Electron from the official logo + the game icon art.
+// Renders all PNG icons/splash screens for web, PWA, Android, iOS and Electron from the official logo + the game icon art.
 // Prereq: python3 tools/process-logo.py  (creates www/img/pt-logo.png from brand/pizza-technologies-logo-original.png)
 // Usage:  node tools/make-icons.js      (needs Playwright + Chromium; set CHROMIUM / PLAYWRIGHT_MODULE if not on PATH)
 const fs = require('fs');
@@ -27,11 +27,11 @@ function stackIcon({ pad = 0, bg = true, badge = true } = {}) {
 W(path.join(root, 'www/img/icon.svg'), stackIcon());
 
 // ---------- Splash: official logo + wordmark on the dark brand background ----------
-const splashSvg = (w, h) => {
-  const m = Math.min(w, h), s = m * .4;
+const splashSvg = (w, h, k = {}) => {
+  const m = Math.min(w, h), s = m * (k.logo || .4), fs = m * (k.font || .06), ls = m * (k.spacing || .012);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}"><rect width="${w}" height="${h}" fill="#1a0f0a"/>
   <image href="${logoUri}" x="${(w - s) / 2}" y="${h / 2 - s * .62}" width="${s}" height="${s}"/>
-  <text x="${w / 2}" y="${h / 2 + s * .62}" text-anchor="middle" font-family="Arial Black,Impact,sans-serif" font-size="${m * .06}" fill="#fff4e0" letter-spacing="${m * .012}">PIZZA TECHNOLOGIES</text></svg>`;
+  <text x="${w / 2}" y="${h / 2 + s * .62}" text-anchor="middle" font-family="Arial Black,Impact,sans-serif" font-size="${fs}" fill="#fff4e0" letter-spacing="${ls}">PIZZA TECHNOLOGIES</text></svg>`;
 };
 
 (async () => {
@@ -66,6 +66,20 @@ const splashSvg = (w, h) => {
     const m = /(\d+) x (\d+)/.exec(execSync(`file "${f}"`).toString());
     if (m) await render(splashSvg(+m[1], +m[2]), +m[1], +m[2], f);
   }
+
+  // ---------- iOS: one 1024 px App Store icon (iOS rounds the corners itself) + the launch image ----------
+  // The launch storyboard shows ONE square image with "aspect fill", so on a tall phone only its middle ~45% is visible:
+  // logo and wordmark are kept small and centred to stay inside that band.
+  const xcassets = path.join(root, 'ios/App/App/Assets.xcassets');
+  if (fs.existsSync(xcassets)) {
+    const iconFile = path.join(xcassets, 'AppIcon.appiconset/AppIcon-512@2x.png');
+    await render(icon, 1024, 1024, iconFile);
+    for (const f of ['splash-2732x2732.png', 'splash-2732x2732-1.png', 'splash-2732x2732-2.png'])
+      await render(splashSvg(2732, 2732, { logo: .22, font: .02, spacing: .006 }), 2732, 2732, path.join(xcassets, 'Splash.imageset', f));
+    // App Store Connect rejects an icon that has an alpha channel (even a fully opaque one): flatten the PNG to plain RGB.
+    execSync(`python3 -c "from PIL import Image; import sys; im = Image.open(sys.argv[1]).convert('RGB'); im.save(sys.argv[1])" "${iconFile}"`);
+  }
+
   W(path.join(res, 'values/ic_launcher_background.xml'), `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#D8402C</color>\n</resources>\n`);
   await browser.close();
   console.log('icons done');

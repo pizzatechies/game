@@ -13,18 +13,28 @@ window.PT.config = {
   apiBase: '',
 
   ads: {
-    /* Android ads run through Unity LevelPlay (free to join; it can also mediate AdMob, AppLovin, Meta... later).
-     * LevelPlay IS the former ironSource platform, so an existing ironSource account works. Add THIS game as its own app in the dashboard
-     * (apps are per package id: com.pizzatechnologies.pizzastack), create a Rewarded and an Interstitial ad unit, then paste the values below.
+    /* Android and iOS ads run through Unity LevelPlay (free to join; it can also mediate AdMob, AppLovin, Meta... later).
+     * LevelPlay IS the former ironSource platform, so an existing ironSource account works. Add THIS game as its own app per platform in the dashboard
+     * (package / bundle id: com.pizzatechnologies.pizzastack), create a Rewarded and an Interstitial ad unit for each, then paste the values below.
      * The ironSource ad network is built in; the Unity Ads network is optional extra demand you can switch on later in the dashboard. While appKey is '' the game still works:
      * "watch to earn" falls back to the clearly-labelled sponsor card (nothing is earned). */
     provider: 'levelplay',
     /* true  = LevelPlay test mode (safe while developing, no revenue). false = real ads. */
     testMode: true,
     levelplay: {
-      appKey: '28acf210d',        // LevelPlay dashboard -> your app -> App key (not a secret: it ships inside the app)
-      rewardedAdUnitId: '7wt218p2yqfo9hvb',   // Ad Units -> Rewarded -> ad unit id
-      interstitialAdUnitId: '',   // Ad Units -> Interstitial -> ad unit id
+      /* LevelPlay apps are per platform: the Android app and the iOS app each have their OWN App Key and ad unit ids
+       * (LevelPlay dashboard -> Apps -> add app -> pick the platform; the App Key is not a secret, it ships inside the app).
+       * iOS stays on the sponsor card until its three values are filled in; it never reuses the Android ones. */
+      android: {
+        appKey: '28acf210d',
+        rewardedAdUnitId: '7wt218p2yqfo9hvb',   // Ad Units -> Rewarded -> ad unit id
+        interstitialAdUnitId: ''                // Ad Units -> Interstitial -> ad unit id
+      },
+      ios: {
+        appKey: '',                             // bundle id: com.pizzatechnologies.pizzastack
+        rewardedAdUnitId: '',
+        interstitialAdUnitId: ''
+      },
       privacyPolicyUrl: '',       // PUBLIC https URL of your hosted privacy policy (shown in the consent dialog)
       loadWaitMs: 10000,          // how long "watch ad" waits for a video to load before giving up
       retryBaseMs: 3000,          // after a failed load, retry after this long (then 6 s, 12 s ... up to 60 s)

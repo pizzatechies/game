@@ -1,16 +1,17 @@
 // Tests the LevelPlay ad flow in a real browser against a FAKE LevelPlayAds plugin (no real ads/network).
 //   node tools/ads-test.js          (needs Playwright + Chromium; set PLAYWRIGHT_MODULE / CHROMIUM if needed)
 // Covers: init order (consent -> initialize -> load), rewarded earned / dismissed early / display failed / never loads,
-// interstitial throttling + paying players, the unconfigured fallback (sponsor card), and the Settings privacy button.
+// interstitial throttling + paying players, the unconfigured fallback (sponsor card), the Settings privacy button, and iOS
+// (own App Key per platform, the App Tracking Transparency prompt between consent and initialize).
 const { spawn } = require('child_process');
 const path = require('path'), assert = require('assert');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const PORT = '8104', sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// Installed before any page script: pretends to be the Capacitor Android runtime with a scriptable LevelPlayAds plugin.
+// Installed before any page script: pretends to be the Capacitor Android (or iOS) runtime with a scriptable LevelPlayAds plugin.
 const FAKE = (cfg) => `(() => {
   const calls = [], handlers = {}; let ready = { rewarded: false, interstitial: false }; let lastLoad = { Rewarded: 0, Interstitial: 0 };
-  const script = Object.assign({ loadRewardedOutcome: 'loaded', showRewardedOutcome: 'reward', showInterOutcome: 'closed', loadMs: 20, failLoads: 0, initFails: 0 }, ${JSON.stringify((cfg && cfg.script) || {})});
+  const script = Object.assign({ loadRewardedOutcome: 'loaded', showRewardedOutcome: 'reward', showInterOutcome: 'closed', loadMs: 20, failLoads: 0, initFails: 0, consentGranted: true, att: [], attMs: 0 }, ${JSON.stringify((cfg && cfg.script) || {})});
   const emit = (n, p) => (handlers[n] || []).forEach(f => f(p || {}));
   // mirrors the real plugin: load() settles only when the ad loaded or failed, and rejects when called again too fast
   const load = (kind, o) => { calls.push(['load' + kind, o]); const now = Date.now();
@@ -23,7 +24,9 @@ const FAKE = (cfg) => `(() => {
     }, script.loadMs)); };
   const plugin = {
     addListener: async (n, f) => { (handlers[n] = handlers[n] || []).push(f); return { remove() {} }; },
-    requestConsentInfo: async o => { calls.push(['requestConsentInfo', o]); return { status: 'GRANTED', granted: true, canRequestAds: true }; },
+    requestConsentInfo: async o => { calls.push(['requestConsentInfo', o]); return { status: script.consentGranted ? 'GRANTED' : 'DENIED', granted: script.consentGranted, canRequestAds: true }; },
+    // iOS only; the statuses are consumed in order, then the player has "allowed" (the real call returns right away once decided)
+    requestTrackingAuthorization: async () => { calls.push(['requestTrackingAuthorization']); if (script.attMs) await new Promise(r => setTimeout(r, script.attMs)); return { status: script.att.length ? script.att.shift() : 'AUTHORIZED' }; },
     showPrivacyOptions: async o => { calls.push(['showPrivacyOptions']); return { status: 'GRANTED' }; },
     launchTestSuite: async () => { calls.push(['launchTestSuite']); },
     getAdvertisingId: async () => ({ id: '11111111-2222-3333-4444-555555555555', limited: false }),
@@ -37,8 +40,8 @@ const FAKE = (cfg) => `(() => {
     showInterstitial: async () => { calls.push(['showInterstitial']); ready.interstitial = false; setTimeout(() => emit('onInterstitialAdClosed'), 30); }
   };
   window.__fake = { calls, script, ready };
-  // The REAL Android bridge has nativePromise/addListener but NO registerPlugin (no JS bundler in this app): mirror that exactly.
-  window.Capacitor = { isNativePlatform: () => true,
+  // The REAL Android and iOS bridges have nativePromise/addListener/getPlatform but NO registerPlugin (no JS bundler in this app): mirror that exactly.
+  window.Capacitor = { isNativePlatform: () => true, getPlatform: () => ${JSON.stringify((cfg && cfg.platform) || 'android')},
     nativePromise: (name, method, opts) => (name === 'LevelPlayAds' && typeof plugin[method] === 'function' ? Promise.resolve().then(() => plugin[method](opts || {})) : Promise.reject(new Error('"' + method + '" is not implemented'))),
     addListener: (name, event, cb) => { plugin.addListener(event, cb); return { remove() {} }; } };
 })();`;
@@ -48,14 +51,14 @@ const FAKE = (cfg) => `(() => {
   await sleep(700);
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || '/opt/pw-browsers/chromium' });
   let n = 0; const ok = s => console.log('  ok', ++n, s);
-  async function open(cfg, { keys = true, units = ['rewarded', 'interstitial'], save = {} } = {}) {
+  async function open(cfg, { keys = true, units = ['rewarded', 'interstitial'], save = {}, platform = 'android' } = {}) {
     const c2 = await browser.newContext({ viewport: { width: 390, height: 844 } });
-    await c2.addInitScript(FAKE(cfg || {}));
+    await c2.addInitScript(FAKE(Object.assign({ platform }, cfg || {})));
     await c2.addInitScript(save0 => { localStorage.setItem('pt_pizzastack_v1', JSON.stringify(Object.assign({ v: 1, id: 'ads-test-player-0001', tutorialDone: true, daily: { last: '2999-01-01', streak: 1 } }, save0))); }, save);
     // serve config.js with the test overrides appended, so ads.js sees them from its very first line
     await c2.route('**/js/config.js', async route => {
       const res = await route.fetch(); let body = await res.text();
-      body += `\nObject.assign(PT.config.ads, { interstitialEveryNGames: 2, firstAfterGames: 0 });` + (keys ? `\nObject.assign(PT.config.ads.levelplay, { appKey: 'TESTAPPKEY', rewardedAdUnitId: '${units.includes('rewarded') ? 'RWD_UNIT' : ''}', interstitialAdUnitId: '${units.includes('interstitial') ? 'INT_UNIT' : ''}', loadWaitMs: 1500, retryBaseMs: 100, minLoadGapMs: 40 });` : `\nObject.assign(PT.config.ads.levelplay, { appKey: '', rewardedAdUnitId: '', interstitialAdUnitId: '' });`);
+      body += `\nObject.assign(PT.config.ads, { interstitialEveryNGames: 2, firstAfterGames: 0 });` + (keys ? `\nObject.assign(PT.config.ads.levelplay.${platform}, { appKey: 'TESTAPPKEY', rewardedAdUnitId: '${units.includes('rewarded') ? 'RWD_UNIT' : ''}', interstitialAdUnitId: '${units.includes('interstitial') ? 'INT_UNIT' : ''}', loadWaitMs: 1500, retryBaseMs: 100, minLoadGapMs: 40 });` : `\nObject.assign(PT.config.ads.levelplay.${platform}, { appKey: '', rewardedAdUnitId: '', interstitialAdUnitId: '' });`);
       await route.fulfill({ response: res, body });
     });
     const page = await c2.newPage(); const errs = []; page.on('pageerror', e => errs.push(e.message));
@@ -70,6 +73,7 @@ const FAKE = (cfg) => `(() => {
     const order = calls.map(c => c[0]); assert.ok(order.indexOf('requestConsentInfo') < order.indexOf('initialize') && order.indexOf('initialize') < order.indexOf('loadRewarded'), order.join(','));
     const init = calls.find(c => c[0] === 'initialize')[1]; assert.strictEqual(init.appKey, 'TESTAPPKEY'); assert.strictEqual(init.isTesting, true);
     assert.strictEqual(calls.find(c => c[0] === 'loadRewarded')[1].adUnitId, 'RWD_UNIT'); assert.strictEqual(calls.find(c => c[0] === 'loadInterstitial')[1].adUnitId, 'INT_UNIT');
+    assert.ok(!order.includes('requestTrackingAuthorization'), 'Android must never ask for iOS tracking permission');
     const consent = calls.find(c => c[0] === 'requestConsentInfo')[1]; assert.ok(/ironSource/.test(consent.message) && consent.acceptButtonText === 'Accept' && consent.declineButtonText === 'Decline');
     ok('works through the real Android bridge (no registerPlugin): consent dialog -> initialize(appKey, test mode) -> load rewarded + interstitial with the configured ad units');
 
@@ -169,6 +173,46 @@ const FAKE = (cfg) => `(() => {
     await page.goto(`http://localhost:${PORT}/`); await page.waitForFunction(() => PT.ads.status() && PT.ads.status().state !== 'starting');
     await page.evaluate(() => PT.ads.launchTestSuite()); assert.ok((await names(page)).includes('launchTestSuite'));
     assert.strictEqual(await page.evaluate(() => PT.ads.deviceAdId()), '11111111-2222-3333-4444-555555555555'); ok('Test Suite opens and the device advertising id is available (for LevelPlay test devices)');
+    assert.deepStrictEqual(errs, []); await ctx.close(); }
+
+  // 20. iOS: own App Key, and Apple's tracking prompt sits between our consent dialog and initialize (asked again if iOS says "not determined")
+  { const { ctx, page, errs } = await open({ script: { att: ['NOT_DETERMINED', 'AUTHORIZED'] } }, { platform: 'ios' });
+    await page.goto(`http://localhost:${PORT}/`); await page.waitForFunction(() => __fake.calls.some(c => c[0] === 'loadRewarded') && __fake.calls.some(c => c[0] === 'loadInterstitial'), null, { timeout: 12000 });
+    const calls = await page.evaluate(() => __fake.calls), order = calls.map(c => c[0]);
+    assert.strictEqual(await page.evaluate(() => PT.ads.platform), 'ios');
+    assert.ok(order.indexOf('requestConsentInfo') < order.indexOf('requestTrackingAuthorization') && order.indexOf('requestTrackingAuthorization') < order.indexOf('initialize') && order.indexOf('initialize') < order.indexOf('loadRewarded'), order.join(','));
+    assert.strictEqual(order.filter(x => x === 'requestTrackingAuthorization').length, 2);
+    assert.strictEqual(calls.find(c => c[0] === 'initialize')[1].appKey, 'TESTAPPKEY'); assert.strictEqual(await page.evaluate(() => PT.ads.configured), true);
+    assert.strictEqual(await page.evaluate(() => PT.ads.showRewarded('t')), true);
+    ok('iOS: consent dialog -> Apple tracking prompt (asked again when iOS said "not determined") -> initialize with the iOS App Key -> rewarded ad earns the reward');
+    assert.deepStrictEqual(errs, []); await ctx.close(); }
+
+  // 21. iOS: player declined personalised ads in our dialog -> no tracking prompt, ads still start
+  { const { ctx, page, errs } = await open({ script: { consentGranted: false } }, { platform: 'ios' });
+    await page.goto(`http://localhost:${PORT}/`); await page.waitForFunction(() => __fake.calls.some(c => c[0] === 'loadRewarded'), null, { timeout: 8000 });
+    const order = await names(page); assert.ok(!order.includes('requestTrackingAuthorization'), order.join(',')); assert.ok(order.includes('initialize'));
+    ok('iOS: "Decline" in the privacy dialog -> Apple tracking prompt is skipped, ads still start (less personalised)');
+    assert.deepStrictEqual(errs, []); await ctx.close(); }
+
+  // 22. iOS with NO iOS App Key (the default config still has the Android ids): must not borrow the Android ones -> sponsor card
+  { const { ctx, page, errs } = await open({}, { platform: 'ios', keys: false });
+    await page.goto(`http://localhost:${PORT}/`); await page.waitForTimeout(800);
+    assert.deepStrictEqual(await names(page), []); assert.strictEqual(await page.evaluate(() => PT.ads.configured), false);
+    assert.ok(await page.evaluate(() => PT.config.ads.levelplay.android.appKey) !== '', 'test premise: Android keys are present');
+    await page.evaluate(() => { PT.config.ads.houseAdSeconds = 1; window.__r = PT.ads.showRewarded('t'); });
+    await page.waitForSelector('#houseAd.show'); await page.waitForFunction(() => !document.querySelector('.ha-close').disabled, null, { timeout: 4000 }); await page.click('.ha-close');
+    assert.strictEqual(await page.evaluate(() => window.__r), true);
+    ok('iOS without its own LevelPlay app key -> never uses the Android key, sponsor card instead, ad SDK untouched');
+    assert.deepStrictEqual(errs, []); await ctx.close(); }
+
+  // 23. iOS: "watch ad" while Apple's tracking prompt is still open waits for it (no time-out), then plays
+  { const { ctx, page, errs } = await open({ script: { attMs: 2600 } }, { platform: 'ios' });
+    await page.goto(`http://localhost:${PORT}/`); await page.waitForFunction(() => window.PT && PT.ads && PT.bus); await watchWaits(page);
+    await page.waitForFunction(() => PT.ads.status() && /tracking choice/.test(PT.ads.status().text), null, { timeout: 4000 });
+    const t0 = Date.now(); assert.strictEqual(await page.evaluate(() => PT.ads.showRewarded('t')), true); const dt = Date.now() - t0;
+    assert.ok(dt > 1500, 'waited ' + dt);       // longer than loadWaitMs (1500): it kept waiting because the prompt was open
+    assert.deepStrictEqual(await page.evaluate(() => window.__waits), [true, false]);
+    ok('iOS: tapping "watch ad" during the tracking prompt waits for the answer instead of giving up (' + dt + ' ms), then plays');
     assert.deepStrictEqual(errs, []); await ctx.close(); }
 
   console.log(`\nAll ${n} ad checks passed`);

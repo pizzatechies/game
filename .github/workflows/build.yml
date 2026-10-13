@@ -1,4 +1,4 @@
-name: Build Pizza Stack (Android APK/AAB + Windows/macOS/Linux)
+name: Build Pizza Stack (Android APK/AAB + iOS IPA + Windows/macOS/Linux)
 
 on:
   push:
@@ -108,6 +108,148 @@ jobs:
             android/app/build/outputs/apk/release/*.apk
             android/app/build/outputs/bundle/release/*.aab
 
+  ios:
+    needs: test
+    # Xcode 26 is what Apple requires for App Store uploads (and what Capacitor 8 needs); macos-26 ships it.
+    runs-on: macos-26
+    env:
+      BUNDLE_ID: com.pizzatechnologies.pizzastack
+      APP_VERSION: ${{ vars.IOS_VERSION || '1.0.0' }}     # repository variable IOS_VERSION overrides it (must go UP with each App Store release)
+      BUILD_NUMBER: ${{ github.run_number }}              # must go up with every upload to App Store Connect
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Toolchain
+        run: xcodebuild -version && xcode-select -p && pod --version
+      - name: Sync web assets, plugins and CocoaPods
+        run: npx cap sync ios
+      - name: Resolved pod versions
+        run: grep -E "^  - (Capacitor|IronSource|UnityAds)" ios/App/Podfile.lock || true
+
+      # Always produce an installable-after-re-signing build: an UNSIGNED device IPA (ads test mode ON, like the debug APK).
+      # It cannot be installed as is. Sideload it with Sideloadly / AltStore (free Apple ID, 7-day certificate) or sign it with your own certificate.
+      - name: Build unsigned device IPA
+        shell: bash
+        run: |
+          LOG="$RUNNER_TEMP/xcodebuild-unsigned.log"
+          if command -v xcbeautify >/dev/null; then PRETTY=xcbeautify; else PRETTY=cat; fi
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/dd-unsigned" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            MARKETING_VERSION="$APP_VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            build 2>&1 | tee "$LOG" | $PRETTY
+          APP="$RUNNER_TEMP/dd-unsigned/Build/Products/Release-iphoneos/App.app"
+          test -d "$APP" || { echo "App.app was not produced"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/ipa/Payload" && cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/PizzaStack-ios-unsigned.ipa" Payload)
+          ls -la PizzaStack-ios-unsigned.ipa
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" -c "Print :CFBundleShortVersionString" -c "Print :CFBundleVersion" -c "Print :MinimumOSVersion" "$APP/Info.plist"
+      - name: Show build log on failure
+        if: failure()
+        run: tail -n 150 "$RUNNER_TEMP/xcodebuild-unsigned.log" || true
+      - uses: actions/upload-artifact@v4
+        with: { name: PizzaStack-ios-unsigned-ipa, path: PizzaStack-ios-unsigned.ipa }
+
+      # Signed App Store build. Needs the repository secrets listed in README.md (iOS section); skipped until they exist.
+      - name: Check for iOS signing secrets
+        id: sign
+        env:
+          P12: ${{ secrets.IOS_CERT_P12_BASE64 }}
+          PROFILE: ${{ secrets.IOS_PROFILE_BASE64 }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY: ${{ secrets.ASC_KEY_P8_BASE64 }}
+        run: |
+          echo "have=$([ -n "$P12" ] && [ -n "$PROFILE" ] && [ -n "$TEAM" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "upload=$([ -n "$ASC_KEY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      # The release ships PRODUCTION ad settings (LevelPlay test mode OFF), exactly like the Android release.
+      - name: Switch to production config (ads test mode OFF)
+        if: steps.sign.outputs.have == 'true'
+        run: |
+          sed -i '' "s/testMode: true,/testMode: false,/" www/js/config.js
+          grep -q "testMode: false," www/js/config.js || { echo "testMode was not switched off"; exit 1; }
+          grep -n "testMode" www/js/config.js
+          npx cap sync ios
+      - name: Install certificate and provisioning profile
+        if: steps.sign.outputs.have == 'true'
+        shell: bash
+        env:
+          P12: ${{ secrets.IOS_CERT_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_CERT_PASSWORD }}
+          PROFILE: ${{ secrets.IOS_PROFILE_BASE64 }}
+        run: |
+          KC="$RUNNER_TEMP/build.keychain-db"; KCPASS="$(uuidgen)"
+          echo "$P12" | base64 -d > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KCPASS" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KCPASS" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$P12_PASSWORD" -A -t cert -f pkcs12
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KCPASS" "$KC" > /dev/null
+          security list-keychain -d user -s "$KC" login.keychain-db
+          security find-identity -v -p codesigning "$KC"
+          echo "$PROFILE" | base64 -d > "$RUNNER_TEMP/profile.mobileprovision"
+          security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" > "$RUNNER_TEMP/profile.plist"
+          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$RUNNER_TEMP/profile.plist")"
+          PROFILE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :Name' "$RUNNER_TEMP/profile.plist")"
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$RUNNER_TEMP/profile.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          echo "PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
+          echo "KEYCHAIN=$KC" >> "$GITHUB_ENV"
+          echo "Profile: $PROFILE_NAME ($PROFILE_UUID)"
+      # Archive unsigned, then sign while exporting (keeps the CocoaPods targets out of the signing step).
+      - name: Archive and export signed IPA
+        if: steps.sign.outputs.have == 'true'
+        shell: bash
+        env: { TEAM: '${{ secrets.APPLE_TEAM_ID }}' }
+        run: |
+          LOG="$RUNNER_TEMP/xcodebuild-archive.log"
+          if command -v xcbeautify >/dev/null; then PRETTY=xcbeautify; else PRETTY=cat; fi
+          xcodebuild archive -workspace ios/App/App.xcworkspace -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            MARKETING_VERSION="$APP_VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" 2>&1 | tee "$LOG" | $PRETTY
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>$TEAM</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key><dict><key>$BUNDLE_ID</key><string>$PROFILE_NAME</string></dict>
+            <key>uploadSymbols</key><true/>
+            <key>stripSwiftSymbols</key><true/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" 2>&1 | tee -a "$LOG" | $PRETTY
+          ls -la "$RUNNER_TEMP/export"
+          cp "$RUNNER_TEMP/export/"*.ipa "$GITHUB_WORKSPACE/PizzaStack-ios-appstore.ipa"
+      - name: Show signing log on failure
+        if: failure() && steps.sign.outputs.have == 'true'
+        run: tail -n 150 "$RUNNER_TEMP/xcodebuild-archive.log" || true
+      - if: steps.sign.outputs.have == 'true'
+        uses: actions/upload-artifact@v4
+        with: { name: PizzaStack-ios-appstore-ipa, path: PizzaStack-ios-appstore.ipa }
+      # Optional: send the IPA straight to App Store Connect / TestFlight (needs the 3 ASC_* secrets). Without them, upload the IPA with Apple's Transporter app.
+      - name: Upload to App Store Connect (TestFlight)
+        if: steps.sign.outputs.have == 'true' && steps.sign.outputs.upload == 'true'
+        shell: bash
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY: ${{ secrets.ASC_KEY_P8_BASE64 }}
+        run: |
+          mkdir -p "$HOME/.private_keys"
+          echo "$ASC_KEY" | base64 -d > "$HOME/.private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          xcrun altool --upload-app --type ios --file PizzaStack-ios-appstore.ipa --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+      - name: Remove signing material from the runner
+        if: always() && steps.sign.outputs.have == 'true'
+        run: |
+          [ -n "$KEYCHAIN" ] && security delete-keychain "$KEYCHAIN" || true
+          rm -rf "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/.private_keys" "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/profile.mobileprovision" || true
+
   desktop:
     needs: test
     strategy:
@@ -137,7 +279,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [android, desktop]
+    needs: [android, ios, desktop]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

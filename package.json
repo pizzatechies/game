@@ -16,6 +16,8 @@
     "icons": "node tools/make-icons.js",
     "test": "node tools/test.js",
     "cap:sync": "cap sync android",
+    "ios:sync": "cap sync ios",
+    "ios:open": "cap open ios",
     "android:debug": "cap sync android && cd android && ./gradlew assembleDebug",
     "android:release": "cap sync android && cd android && ./gradlew assembleRelease bundleRelease",
     "dist:win": "electron-builder --win --publish never",
@@ -27,6 +29,7 @@
     "@capacitor/android": "^8.5.3",
     "@capacitor/cli": "^8.5.3",
     "@capacitor/core": "^8.5.3",
+    "@capacitor/ios": "^8.5.3",
     "capacitor-levelplay-ads": "^0.1.42",
     "electron": "^44.7.0",
     "electron-builder": "^26.15.3"
@@ -35,7 +38,7 @@
   "build": {
     "appId": "com.pizzatechnologies.pizzastack",
     "productName": "Pizza Stack",
-    "copyright": "Copyright \u00a9 Pizza Technologies",
+    "copyright": "Copyright © Pizza Technologies",
     "files": [
       "electron/**",
       "www/**",
@@ -79,6 +82,6 @@
       "unityads"
     ],
     "consentProvider": "custom",
-    "userTrackingDescription": "This identifier is used to show you relevant ads and to measure them."
+    "userTrackingDescription": "Pizza Stack uses your device's advertising identifier to show you more relevant ads and to measure them. You can say no and still play for free."
   }
 }

@@ -1,24 +1,27 @@
 /* Monetization: rewarded + interstitial ads.
- *  - Android (Capacitor): Unity LevelPlay (free; mediation platform that can also serve AdMob/AppLovin/Meta later).
- *    Needs the keys in PT.config.ads.levelplay. Until appKey is set, "watch to earn" uses the sponsor card (nothing earned).
+ *  - Android + iOS (Capacitor): Unity LevelPlay (free; mediation platform that can also serve AdMob/AppLovin/Meta later).
+ *    Needs the keys for that platform in PT.config.ads.levelplay.android / .ios. Until appKey is set, "watch to earn" uses the sponsor card (nothing earned).
  *  - Web / PC: optional Google AdSense in the side gutters + a clearly-labelled sponsor card for "watch to earn".
  *  - Players who bought "Remove Ads" / "Pizza Pass" never see interstitials. Rewarded ads are always opt-in. */
 (function () {
-  const PT = window.PT, cfg = PT.config, ad = cfg.ads, lpc = ad.levelplay || {};
+  const PT = window.PT, cfg = PT.config, ad = cfg.ads;
   const native = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
+  const platform = native && typeof Capacitor.getPlatform === 'function' ? Capacitor.getPlatform() : 'web';   // 'android' | 'ios' | 'web'
+  /* Shared settings plus THIS platform's own App Key / ad units: a LevelPlay app key only works on the platform it was created for. */
+  const lpc = Object.assign({}, ad.levelplay || {}, (ad.levelplay || {})[platform] || {});
   const electron = /Electron/i.test(navigator.userAgent);
   // real ad network on this device? needs the app key AND at least one ad unit id; each format also needs its own unit id
   const configured = native && !!lpc.appKey && !!(lpc.rewardedAdUnitId || lpc.interstitialAdUnitId);
 
   let LP = null, ready = false, rewardEarned = false, cancelled = false;
-  /* The Android bridge provides Capacitor.nativePromise / Capacitor.addListener but NOT registerPlugin (that only exists when the
+  /* The Android and iOS bridges provide Capacitor.nativePromise / Capacitor.addListener but NOT registerPlugin (that only exists when the
    * Capacitor JS library is bundled, which this no-build game does not do). So call the native plugin through the primitives. */
   function nativePlugin() {
     if (typeof Capacitor.registerPlugin === 'function') return Capacitor.registerPlugin('LevelPlayAds');   // works too if the JS library is ever bundled
     if (typeof Capacitor.nativePromise !== 'function') throw new Error('Capacitor bridge is missing nativePromise');
     const call = m => o => Capacitor.nativePromise('LevelPlayAds', m, o || {});
     const out = { addListener: (n, cb) => Capacitor.addListener('LevelPlayAds', n, cb) };
-    ['requestConsentInfo', 'showPrivacyOptions', 'initialize', 'loadRewarded', 'isRewardedReady', 'showRewarded', 'loadInterstitial', 'isInterstitialReady', 'showInterstitial', 'launchTestSuite', 'getAdvertisingId']
+    ['requestConsentInfo', 'showPrivacyOptions', 'initialize', 'loadRewarded', 'isRewardedReady', 'showRewarded', 'loadInterstitial', 'isInterstitialReady', 'showInterstitial', 'launchTestSuite', 'getAdvertisingId', 'requestTrackingAuthorization']
       .forEach(m => { out[m] = call(m); });
     return out;
   }
@@ -53,6 +56,17 @@
   }
   let rewarded = null, inter = null;
 
+  /* iOS only: Apple's App Tracking Transparency prompt (the advertising ID is all zeros until the player allows it). It is shown after
+   * our own privacy dialog and only appears while the app is active and no other dialog is on screen, so give the consent dialog a
+   * moment to disappear and ask again if iOS answered "not determined" without showing anything. Declining is fine: ads just stay less personalised. */
+  async function askTracking() {
+    for (let i = 0; i < 3; i++) {
+      await sleep(i === 0 ? 700 : 1500);
+      const r = await LP.requestTrackingAuthorization();
+      if (!r || r.status !== 'NOT_DETERMINED') return;
+    }
+  }
+
   /* First launch: the plugin shows a native Accept / Decline dialog and waits for the answer before any ad loads. The answer is
    * passed to Unity LevelPlay (and the Unity Ads network). It is a simple dialog, not an IAB-certified CMP. */
   const consentOptions = () => ({
@@ -74,7 +88,8 @@
         rewarded = rewarded || Slot('Rewarded', lpc.rewardedAdUnitId); inter = inter || Slot('Interstitial', lpc.interstitialAdUnitId);
         if (!listening) { listening = true; rewarded.listen(); inter.listen(); LP.addListener('onRewardedAdRewarded', () => { rewardEarned = true; }); }
         stage = 'consent';     // the plugin shows a native privacy dialog on the very first launch and waits for the answer
-        await LP.requestConsentInfo(consentOptions());
+        const consent = await LP.requestConsentInfo(consentOptions());
+        if (platform === 'ios' && !(consent && consent.granted === false)) { stage = 'tracking'; await askTracking(); }   // skipped if they declined personalised ads
         stage = 'initialize';
         await LP.initialize({ appKey: lpc.appKey, isTesting: !!ad.testMode, userId: PT.store.get().id });
         ready = true; stage = 'ready'; initError = ''; initFails = 0;
@@ -102,7 +117,7 @@
     if (!native || !configured) return null;
     if (!ready) {
       if (initError) return { state: 'failed', text: 'Ads could not start (' + initError + ') - retrying' + (initFails > 1 ? ` · tried ${initFails}x` : '') };
-      return { state: 'starting', text: stage === 'consent' ? 'Waiting for your privacy choice…' : 'Ads are starting…' };
+      return { state: 'starting', text: stage === 'consent' ? 'Waiting for your privacy choice…' : stage === 'tracking' ? 'Waiting for your tracking choice…' : 'Ads are starting…' };
     }
     if (rewarded.loaded) return { state: 'ready', text: 'Rewarded video: ready' };
     if (rewarded.loading) return { state: 'loading', text: 'Rewarded video: loading…' };
@@ -152,7 +167,7 @@
         cancelled = false; PT.bus.emit('ads-wait', true);
         clearTimeout(initTimer); startAds();
         const end0 = Date.now() + (lpc.loadWaitMs || 10000);
-        while (!cancelled && !ready && (stage === 'consent' || Date.now() < end0)) {   // never time out while the privacy dialog is open
+        while (!cancelled && !ready && (stage === 'consent' || stage === 'tracking' || Date.now() < end0)) {   // never time out while a privacy dialog is open
           if (!starting && !initTimer) startAds();
           await sleep(80);
         }
@@ -201,5 +216,5 @@
     } catch (e) { inter.closed = null; inter.schedule(1500); }
   }
 
-  PT.ads = { init, showRewarded, maybeInterstitial, native, adsOff, electron, configured, hasPrivacyOptions, showPrivacyOptions, status, cancelWait, launchTestSuite, deviceAdId };
+  PT.ads = { init, showRewarded, maybeInterstitial, native, platform, adsOff, electron, configured, hasPrivacyOptions, showPrivacyOptions, status, cancelWait, launchTestSuite, deviceAdId };
 })();
