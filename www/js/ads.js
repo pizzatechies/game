@@ -11,6 +11,17 @@
   const configured = native && !!lpc.appKey && !!(lpc.rewardedAdUnitId || lpc.interstitialAdUnitId);
 
   let LP = null, ready = false, rewardEarned = false, cancelled = false;
+  /* The Android bridge provides Capacitor.nativePromise / Capacitor.addListener but NOT registerPlugin (that only exists when the
+   * Capacitor JS library is bundled, which this no-build game does not do). So call the native plugin through the primitives. */
+  function nativePlugin() {
+    if (typeof Capacitor.registerPlugin === 'function') return Capacitor.registerPlugin('LevelPlayAds');   // works too if the JS library is ever bundled
+    if (typeof Capacitor.nativePromise !== 'function') throw new Error('Capacitor bridge is missing nativePromise');
+    const call = m => o => Capacitor.nativePromise('LevelPlayAds', m, o || {});
+    const out = { addListener: (n, cb) => Capacitor.addListener('LevelPlayAds', n, cb) };
+    ['requestConsentInfo', 'showPrivacyOptions', 'initialize', 'loadRewarded', 'isRewardedReady', 'showRewarded', 'loadInterstitial', 'isInterstitialReady', 'showInterstitial']
+      .forEach(m => { out[m] = call(m); });
+    return out;
+  }
   const adsOff = () => { const s = PT.store.get(); return s.adsRemoved || s.pass; };
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const gap = lpc.minLoadGapMs || 2500, retryBase = lpc.retryBaseMs || 3000;
@@ -42,17 +53,14 @@
   }
   let rewarded = null, inter = null;
 
-  /* What the consent dialog shows (Unity LevelPlay "custom" consent provider). Only the networks listed in package.json
-   * ("levelplay.networks") are mediated; add services here when you add networks. */
-  const CONSENT = {
-    categories: [{ id: 'essential', locked: true, order: 0 }, { id: 'marketing', default: false, order: 1 }],
-    services: [
-      { id: 'pizza-stack', categoryId: 'essential', default: true, company: { name: 'Pizza Technologies' }, description: 'Saves your progress, coins and settings on this device so the game works offline.' },
-      { id: 'levelplay', categoryId: 'marketing', default: false, company: { name: 'Unity Technologies (ironSource)' }, description: 'Unity LevelPlay (formerly ironSource) picks which ad network fills each ad and shows ironSource ads itself (uses your advertising ID).', urls: { privacy: 'https://unity.com/legal/privacy-policy' } },
-      { id: 'unity-ads', categoryId: 'marketing', network: 'unityads', default: false, company: { name: 'Unity Technologies' }, description: 'Shows video and full-screen ads and measures them (uses your advertising ID). Declining still lets you play; you may see less relevant ads.', urls: { privacy: 'https://unity.com/legal/privacy-policy' } }
-    ]
-  };
-  const consentOptions = () => ({ services: CONSENT, appName: cfg.game, accentColor: '#ff5d3a', networks: ['unityads'], privacyPolicyUrl: lpc.privacyPolicyUrl || undefined });
+  /* First launch: the plugin shows a native Accept / Decline dialog and waits for the answer before any ad loads. The answer is
+   * passed to Unity LevelPlay (and the Unity Ads network). It is a simple dialog, not an IAB-certified CMP. */
+  const consentOptions = () => ({
+    title: 'Ads and your privacy',
+    message: cfg.game + ' is free thanks to ads. Our ad partners (Unity LevelPlay / ironSource and Unity Ads) use your advertising ID to show and measure ads. Accept to see personalised ads, or decline to keep ads less personalised. You can change this any time in Settings > Ad & privacy choices.',
+    acceptButtonText: 'Accept', declineButtonText: 'Decline',
+    networks: ['unityads'], privacyPolicyUrl: lpc.privacyPolicyUrl || undefined
+  });
 
   let stage = 'idle', initError = '', initFails = 0, starting = null, initTimer = null, listening = false;
   /* Starts the ad SDK: consent -> initialize -> first load. If anything fails it retries by itself (growing delay), so one
@@ -62,7 +70,7 @@
     if (starting) return starting;
     starting = (async () => {
       try {
-        LP = LP || Capacitor.registerPlugin('LevelPlayAds');
+        LP = LP || nativePlugin();
         rewarded = rewarded || Slot('Rewarded', lpc.rewardedAdUnitId); inter = inter || Slot('Interstitial', lpc.interstitialAdUnitId);
         if (!listening) { listening = true; rewarded.listen(); inter.listen(); LP.addListener('onRewardedAdRewarded', () => { rewardEarned = true; }); }
         stage = 'consent';     // the plugin shows a native privacy dialog on the very first launch and waits for the answer

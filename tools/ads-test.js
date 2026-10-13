@@ -35,7 +35,10 @@ const FAKE = (cfg) => `(() => {
     showInterstitial: async () => { calls.push(['showInterstitial']); ready.interstitial = false; setTimeout(() => emit('onInterstitialAdClosed'), 30); }
   };
   window.__fake = { calls, script, ready };
-  window.Capacitor = { isNativePlatform: () => true, registerPlugin: name => (name === 'LevelPlayAds' ? plugin : {}) };
+  // The REAL Android bridge has nativePromise/addListener but NO registerPlugin (no JS bundler in this app): mirror that exactly.
+  window.Capacitor = { isNativePlatform: () => true,
+    nativePromise: (name, method, opts) => (name === 'LevelPlayAds' && typeof plugin[method] === 'function' ? Promise.resolve().then(() => plugin[method](opts || {})) : Promise.reject(new Error('"' + method + '" is not implemented'))),
+    addListener: (name, event, cb) => { plugin.addListener(event, cb); return { remove() {} }; } };
 })();`;
 
 (async () => {
@@ -65,8 +68,8 @@ const FAKE = (cfg) => `(() => {
     const order = calls.map(c => c[0]); assert.ok(order.indexOf('requestConsentInfo') < order.indexOf('initialize') && order.indexOf('initialize') < order.indexOf('loadRewarded'), order.join(','));
     const init = calls.find(c => c[0] === 'initialize')[1]; assert.strictEqual(init.appKey, 'TESTAPPKEY'); assert.strictEqual(init.isTesting, true);
     assert.strictEqual(calls.find(c => c[0] === 'loadRewarded')[1].adUnitId, 'RWD_UNIT'); assert.strictEqual(calls.find(c => c[0] === 'loadInterstitial')[1].adUnitId, 'INT_UNIT');
-    const consent = calls.find(c => c[0] === 'requestConsentInfo')[1]; assert.ok(consent.services && consent.services.services.some(s => s.network === 'unityads'));
-    ok('init order: consent -> initialize(appKey, test mode) -> load rewarded + interstitial with the configured ad units');
+    const consent = calls.find(c => c[0] === 'requestConsentInfo')[1]; assert.ok(/ironSource/.test(consent.message) && consent.acceptButtonText === 'Accept' && consent.declineButtonText === 'Decline');
+    ok('works through the real Android bridge (no registerPlugin): consent dialog -> initialize(appKey, test mode) -> load rewarded + interstitial with the configured ad units');
 
     // 2. rewarded: earned
     assert.strictEqual(await page.evaluate(() => PT.ads.showRewarded('t')), true); ok('rewarded ad watched to the end -> reward granted');
