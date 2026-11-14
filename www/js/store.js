@@ -13,8 +13,8 @@
     settings: { sound: true, music: true, vibe: true },
     daily: { last: '', streak: 0 },
     missions: { date: '', list: [] },
-    adsRemoved: false, pass: false,
-    scoreQueue: [], lbCache: null, gamesSinceAd: 0, tutorialDone: false, claimed: {}
+    pass: false,
+    scoreQueue: [], lbCache: null, tutorialDone: false, claimed: {}
   });
 
   let data = null;

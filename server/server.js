@@ -3,11 +3,11 @@
  *   GET  /api/health
  *   POST /api/score                 { id, name, score, layers, perfects, seconds }
  *   GET  /api/leaderboard?limit=50&id=<playerId>
- *   GET  /api/entitlements/:id      -> { adsRemoved, pass, coinCredits }
+ *   GET  /api/entitlements/:id      -> { pass, coinCredits }
  *   POST /api/stripe/webhook        Stripe checkout.session.completed (signature verified)
  *
  * Config (env): PORT, DATA_DIR, ALLOW_ORIGIN, STRIPE_WEBHOOK_SECRET,
- *               PAYMENT_LINKS = {"plink_xxx":"removeAds","plink_yyy":"coinPack","plink_zzz":"pizzaPass"}
+ *               PAYMENT_LINKS = {"plink_yyy":"coinPack","plink_zzz":"pizzaPass"}
  *               COIN_PACK_COINS (default 1500)
  */
 'use strict';
@@ -57,7 +57,7 @@ function readBody(req, max = 32768) {
 }
 const validId = id => typeof id === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(id);
 const cleanName = n => String(n || 'Chef').replace(/[\u0000-\u001f<>&"'`]/g, '').trim().slice(0, 16) || 'Chef';
-const player = id => (db.players[id] = db.players[id] || { name: 'Chef', best: 0, games: 0, updated: 0, ent: { adsRemoved: false, pass: false, coinCredits: 0 } });
+const player = id => (db.players[id] = db.players[id] || { name: 'Chef', best: 0, games: 0, updated: 0, ent: { pass: false, coinCredits: 0 } });
 
 /* Plausibility checks (not bulletproof anti-cheat, but blocks trivial score spoofing). */
 function plausible(b) {
@@ -109,7 +109,7 @@ const server = http.createServer(async (req, res) => {
     const ent = /^\/api\/entitlements\/([A-Za-z0-9-]{8,64})$/.exec(url.pathname);
     if (ent && req.method === 'GET') {
       const p = db.players[ent[1]];
-      return send(res, 200, p ? p.ent : { adsRemoved: false, pass: false, coinCredits: 0 });
+      return send(res, 200, p ? { pass: !!p.ent.pass, coinCredits: p.ent.coinCredits || 0 } : { pass: false, coinCredits: 0 });
     }
 
     if (url.pathname === '/api/stripe/webhook' && req.method === 'POST') {
@@ -122,8 +122,7 @@ const server = http.createServer(async (req, res) => {
         if (s.payment_status === 'paid' && validId(id)) {
           const product = PAYMENT_LINKS[s.payment_link] || (s.metadata && s.metadata.product);
           const p = player(id);
-          if (product === 'removeAds') p.ent.adsRemoved = true;
-          else if (product === 'pizzaPass') { p.ent.pass = true; p.ent.adsRemoved = true; }
+          if (product === 'pizzaPass') p.ent.pass = true;
           else if (product === 'coinPack') p.ent.coinCredits += COIN_PACK;
           else console.warn('unknown product for payment link', s.payment_link);
         }

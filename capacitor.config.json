@@ -3,6 +3,15 @@
   "appName": "Pizza Stack",
   "webDir": "www",
   "backgroundColor": "#1a0f0a",
-  "android": { "allowMixedContent": false },
-  "server": { "androidScheme": "https" }
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "never",
+    "scrollEnabled": false,
+    "allowsLinkPreview": false
+  }
 }

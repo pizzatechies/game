@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const os = require('os'), fs = require('fs'), path = require('path');
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'pizza-'));
 process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
-process.env.PAYMENT_LINKS = JSON.stringify({ plink_ads: 'removeAds', plink_coins: 'coinPack', plink_pass: 'pizzaPass' });
+process.env.PAYMENT_LINKS = JSON.stringify({ plink_coins: 'coinPack', plink_pass: 'pizzaPass' });
 const { server } = require('../server/server');
 
 const call = async (base, p, opts) => { const r = await fetch(base + p, opts); return { status: r.status, body: await r.json() }; };
@@ -29,9 +29,9 @@ server.listen(0, async () => {
 
     // Stripe webhook
     const ev = (id, link, ref, status = 'paid') => JSON.stringify({ id, type: 'checkout.session.completed', data: { object: { client_reference_id: ref, payment_link: link, payment_status: status } } });
-    r = await post(base, '/api/stripe/webhook', ev('evt_1', 'plink_ads', A), { 'Stripe-Signature': 't=1,v1=bad' }); assert.strictEqual(r.status, 400); ok('webhook rejects bad signature');
-    let raw = ev('evt_2', 'plink_ads', A); r = await post(base, '/api/stripe/webhook', raw, { 'Stripe-Signature': sign(raw) }); assert.strictEqual(r.status, 200);
-    assert.strictEqual((await call(base, '/api/entitlements/' + A)).body.adsRemoved, true); ok('remove-ads unlocked');
+    r = await post(base, '/api/stripe/webhook', ev('evt_1', 'plink_pass', A), { 'Stripe-Signature': 't=1,v1=bad' }); assert.strictEqual(r.status, 400); ok('webhook rejects bad signature');
+    let raw = ev('evt_2', 'plink_coins', B); r = await post(base, '/api/stripe/webhook', raw, { 'Stripe-Signature': sign(raw) }); assert.strictEqual(r.status, 200);
+    assert.strictEqual((await call(base, '/api/entitlements/' + B)).body.coinCredits, 1500); ok('coin pack credited');
     r = await post(base, '/api/stripe/webhook', raw, { 'Stripe-Signature': sign(raw) }); assert.strictEqual(r.body.duplicate, true); ok('webhook is idempotent');
     raw = ev('evt_3', 'plink_coins', A); await post(base, '/api/stripe/webhook', raw, { 'Stripe-Signature': sign(raw) });
     raw = ev('evt_4', 'plink_coins', A); await post(base, '/api/stripe/webhook', raw, { 'Stripe-Signature': sign(raw) });
@@ -39,7 +39,7 @@ server.listen(0, async () => {
     raw = ev('evt_5', 'plink_pass', B, 'unpaid'); await post(base, '/api/stripe/webhook', raw, { 'Stripe-Signature': sign(raw) });
     assert.strictEqual((await call(base, '/api/entitlements/' + B)).body.pass, false); ok('unpaid sessions grant nothing');
     raw = ev('evt_6', 'plink_pass', B); await post(base, '/api/stripe/webhook', raw, { 'Stripe-Signature': sign(raw) });
-    const e = (await call(base, '/api/entitlements/' + B)).body; assert.ok(e.pass && e.adsRemoved); ok('pizza pass unlocks pass + no ads');
+    const e = (await call(base, '/api/entitlements/' + B)).body; assert.ok(e.pass && !('adsRemoved' in e)); ok('pizza pass unlocked');
     console.log(`\nAll ${n} server tests passed`);
     server.close(); process.exit(0);
   } catch (e) { console.error('FAILED:', e); process.exit(1); }

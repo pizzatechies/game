@@ -8,3 +8,16 @@ server/data/
 *.keystore
 keystore.properties
 .env
+# iOS signing material (tools/make-ios-signing.sh)
+*.p12
+*.p8
+*.cer
+*.csr
+*.key
+*.mobileprovision
+pizza-ios.*
+# iOS build output / CocoaPods
+ios/App/Pods/
+ios/App/build/
+*.xcarchive
+*.ipa

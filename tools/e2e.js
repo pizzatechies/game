@@ -16,11 +16,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const b = await chromium.launch({ executablePath: process.env.CHROMIUM || '/opt/pw-browsers/chromium' });
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, serviceWorkers: 'allow' });
   const p = await ctx.newPage();
-  const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|net::ERR/.test(m.text())) errs.push(m.text()); });
+  const errs = [], adReqs = []; p.on('request', r => { if (/googlesyndication|doubleclick|adservice|unityads|ironsrc|levelplay/i.test(r.url())) adReqs.push(r.url()); }); p.on('pageerror', e => errs.push(e.message)); p.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|net::ERR/.test(m.text())) errs.push(m.text()); });
   let n = 0; const ok = s => console.log('  ok', ++n, s);
 
   await p.goto('http://localhost:8099/');
-  await p.evaluate(() => { PT.config.apiBase = 'http://localhost:8788'; PT.config.ads.houseAdSeconds = 1; });
+  await p.evaluate(() => { PT.config.apiBase = 'http://localhost:8788'; });
   await p.waitForFunction(() => document.getElementById('splash') === null || document.getElementById('splash').classList.contains('out'), null, { timeout: 14000 });
   await p.waitForSelector('text=CLAIM 50 COINS'); await p.click('text=CLAIM 50 COINS'); await p.click('#mClose');
   assert.strictEqual(await p.evaluate(() => PT.store.get().coins), 50); ok('first-launch daily reward claimed (+50 coins)');
@@ -48,26 +48,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await p.mouse.click(195, 300);
   assert.strictEqual(await p.evaluate(() => PT.game.state.layers.length), before + 1); ok('pointer tap drops a layer');
 
-  // game over
+  // game over (after a realistic run length, so the server's anti-cheat accepts the score)
+  await p.waitForTimeout(3500);
   await p.evaluate(() => { PT.game.state.cur.x = -900; PT.game.tap(); });
   await p.waitForSelector('#over:not(.hidden)', { timeout: 15000 }); await p.waitForTimeout(500);
   await p.screenshot({ path: path.join(OUT, 'gameover.png') });
   const score = await p.evaluate(() => PT.store.get().best); assert.ok(score > 10); ok('game over screen, best score saved: ' + score);
 
-  // revive through the sponsor ad (web)
-  await p.click('#btnRevive');
-  await p.waitForSelector('#houseAd.show'); await p.screenshot({ path: path.join(OUT, 'housead.png') });
-  await p.waitForFunction(() => !document.querySelector('.ha-close').disabled, null, { timeout: 5000 }); await p.click('.ha-close');
-  await p.waitForSelector('#hud:not(.hidden)');
-  assert.strictEqual(await p.evaluate(() => PT.game.state.over), false); ok('rewarded ad -> revive continues the same tower');
-  await p.evaluate(() => { PT.game.state.cur.x = -900; PT.game.tap(); });
-  await p.waitForSelector('#over:not(.hidden)', { timeout: 15000 });
-  assert.ok(await p.isHidden('#btnRevive')); ok('revive is limited to once per run');
-
-  // double coins ad
-  const c0 = await p.evaluate(() => PT.store.get().coins); await p.click('#btnDouble');
-  await p.waitForFunction(() => !document.querySelector('.ha-close').disabled, null, { timeout: 5000 }); await p.click('.ha-close');
-  await p.waitForTimeout(300); assert.ok(await p.evaluate(() => PT.store.get().coins) > c0); ok('double-coins ad pays out');
+  // no ads anywhere: no ad buttons, no ad overlays, no ad script, no ad network requests
+  assert.ok(await p.evaluate(() => !document.querySelector('#btnRevive,#btnDouble,#houseAd,#adWait,.adslot,script[src*="ads"]') && !window.PT.ads && !/watch ad/i.test(document.body.innerText))); ok('game over screen has no ads');
 
   // online: score reached the server and shows in the leaderboard
   await p.waitForFunction(async () => (await (await fetch('http://localhost:8788/api/leaderboard')).json()).top.length > 0, null, { timeout: 14000 }); ok('score synced to online server');
@@ -83,12 +72,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await p.waitForTimeout(3000);
   await p.click('#btnPlay', { force: true }); await p.waitForFunction(() => PT.game.state && !PT.game.state.demo);
   for (let i = 0; i < 4; i++) await drop(0);
+  await p.waitForTimeout(1500);
   await p.evaluate(() => { PT.game.state.cur.x = -900; PT.game.tap(); });
   await p.waitForSelector('#over:not(.hidden)', { timeout: 15000 });
   const q = await p.evaluate(() => PT.store.get().scoreQueue.length); assert.ok(q >= 1); ok('offline run queued for sync (' + q + ')');
   await ctx.setOffline(false);
   await p.evaluate(() => PT.net.ping()); await p.waitForFunction(() => PT.store.get().scoreQueue.length === 0, null, { timeout: 14000 }); ok('queue flushed when back online');
 
+  await p.click('#btnHome'); await p.click('[data-open=shop]'); assert.ok(!/watch ad/i.test(await p.innerText('#mBody'))); await p.click('#mClose');
+  assert.deepStrictEqual(adReqs, []); ok('no ad network requests during the whole session');
   assert.deepStrictEqual(errs, []); ok('no console errors');
   console.log(`\nAll ${n} e2e checks passed. Screenshots: ${OUT}`);
   await b.close(); procs.forEach(x => x.kill()); process.exit(0);
