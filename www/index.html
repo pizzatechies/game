@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#1a0f0a">
-<meta name="description" content="Pizza Stack - the addictive one-tap pizza stacking game from Pizza Technologies. Play online or offline.">
+<meta name="description" content="Pizza Stack - the ad-free one-tap pizza stacking game from Pizza Technologies. Play online or offline.">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Pizza Stack by Pizza Technologies</title>
@@ -26,7 +26,6 @@
       <li><b>8 perfects</b> in a row = PIZZA FEVER</li>
       <li><kbd>Esc</kbd> pauses</li>
     </ul>
-    <div id="slotL" class="adslot"></div>
   </aside>
 
   <main id="stage">
@@ -68,8 +67,6 @@
         <div class="over-row"><div><small>BEST</small><b id="oBest">0</b></div><div><small>LAYERS</small><b id="oLayers">0</b></div><div><small>PERFECT</small><b id="oPerf">0</b></div></div>
         <div class="over-coins pill"><i class="coin"></i><span id="oCoins">+0</span></div>
         <div class="unlock" id="unlockBar"><div class="unlock-fill" id="unlockFill"></div><span id="unlockTxt"></span></div>
-        <button id="btnRevive" class="btn ad hidden"><span class="ic ic-play"></span> CONTINUE <small>watch ad</small></button>
-        <button id="btnDouble" class="btn ad2 hidden"><i class="coin"></i> DOUBLE COINS <small>watch ad</small></button>
         <button id="btnRetry" class="btn big">PLAY AGAIN</button>
         <div class="over-row2">
           <button id="btnHome" class="icon-btn"><span class="ic ic-home"></span><small>Home</small></button>
@@ -85,22 +82,6 @@
 
     <!-- Pause -->
     <div id="pauseOv" class="screen hidden"><div class="over-card"><div class="over-title">PAUSED</div><button id="btnResume" class="btn big">RESUME</button><button id="btnQuit" class="btn ghost">Quit to menu</button></div></div>
-
-    <!-- House ad (web/PC rewarded) -->
-    <div id="houseAd" class="screen">
-      <div class="over-card ha-card">
-        <div class="ha-tag">AD &middot; SPONSORED</div>
-        <img src="img/pt-logo.png" alt="Pizza Technologies logo" class="ha-logo">
-        <div class="ha-name">PIZZA TECHNOLOGIES</div>
-        <h3 class="ha-title">Sponsored</h3>
-        <p>Pizza Technologies is building more games, made for people who love a good stack. Thanks for playing!</p>
-        <a class="ha-link" id="haLink" href="#" target="_blank" rel="noopener">Visit Pizza Technologies</a>
-        <button class="btn big ha-close" disabled>Claim reward <span class="ha-count">5</span></button>
-      </div>
-    </div>
-
-    <!-- Waiting for a rewarded video to load -->
-    <div id="adWait" class="screen"><div class="aw-card"><div class="aw-spin"></div><div class="aw-txt">Loading video…</div><button id="btnAdCancel" class="btn ghost">Cancel</button></div></div>
 
     <!-- Splash -->
     <div id="splash">
@@ -138,7 +119,6 @@
   <aside id="gutterR" class="gutter">
     <h3>TOP CHEFS</h3>
     <ol id="gutterBoard"></ol>
-    <div id="slotR" class="adslot"></div>
     <p class="g-note">Pizza Stack &middot; a Pizza Technologies game</p>
   </aside>
 </div>
@@ -150,7 +130,6 @@
 <script src="js/music.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/net.js"></script>
-<script src="js/ads.js"></script>
 <script src="js/game.js"></script>
 <script src="js/ui.js"></script>
 </body>

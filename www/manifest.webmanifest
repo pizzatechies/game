@@ -1,7 +1,7 @@
 {
   "name": "Pizza Stack",
   "short_name": "Pizza Stack",
-  "description": "The addictive pizza stacking game from Pizza Technologies. Play online or offline.",
+  "description": "The ad-free pizza stacking game from Pizza Technologies. Play online or offline.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "fullscreen",

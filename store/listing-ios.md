@@ -20,7 +20,7 @@ The app is **iPhone only** (portrait), so no iPad screenshots are needed. To add
 **Subtitle** (29 chars, 30 max): `One-tap pizza stacking arcade`
 
 **Promotional text** (140 chars, 170 max, can be edited any time without a new build):
-`Tap to drop pizzas, chain PERFECT drops, ignite Pizza Fever and climb from the kitchen to the Pizza Galaxy. Free, quick runs, plays offline!`
+`Tap to drop pizzas, chain PERFECT drops, ignite Pizza Fever and climb from the kitchen to the Pizza Galaxy. Free, no ads, plays offline!`
 
 **Description** (4000 max): use the "Full description" from `listing.md` as is (1,275 chars). Do not mention Android, Google Play or other stores in an App Store listing.
 
@@ -33,38 +33,31 @@ The app is **iPhone only** (portrait), so no iPad screenshots are needed. To add
 **Copyright:** `2026 Pizza Technologies` [CONFIRM the legal entity name]
 **Support URL:** your support page, e.g. `https://pizzatechnologies.com/support` [CONFIRM; required]
 **Marketing URL:** `https://pizzatechnologies.com` [optional]
-**Privacy Policy URL:** the public URL of `www/privacy.html` (e.g. via GitHub Pages) [CONFIRM; **required**, and it must name the ad partners]
+**Privacy Policy URL:** the public URL of `www/privacy.html` (e.g. via GitHub Pages) [CONFIRM; **required**]
 
 ## 3. App Store Connect answers (drafts, [CONFIRM] each one)
 
 **Age rating questionnaire:** no violence, no sexual content, no profanity, no gambling or contests, no medical content, no horror, no user-generated content, no chat, no unrestricted web access. Expect **4+**. (Apple's questionnaire changes; answer each question for what the app does today.)
 
-**Advertising:** the app shows ads (Unity LevelPlay / ironSource and Unity Ads): an interstitial between some runs once an interstitial ad unit is set, and optional rewarded videos.
+**Advertising:** none. The app contains no ads.
 
 **In-app purchases:** none. The Store tab (Stripe web purchases) is hidden in the native apps, as Apple requires in-app purchase for digital goods. Update this if you add StoreKit.
 
 **Encryption:** the app only uses Apple's standard HTTPS/TLS, so it is exempt. `ITSAppUsesNonExemptEncryption = NO` is already set in `Info.plist`, so the build is not held for export-compliance questions each time.
 
-**Tracking / App Tracking Transparency:** yes, the app asks for tracking permission (the plain-language reason is in `Info.plist`, key `NSUserTrackingUsageDescription`). Apple rejects apps that block play when the player says no; Pizza Stack plays the same either way, with less personalised ads.
+**Tracking / App Tracking Transparency:** no. The app does not track and never shows the tracking prompt.
 
-**App Privacy ("nutrition label") draft.** The ad SDK collects this, so declare it as data collected **and used to track**:
-| Data type | Purpose | Linked to the player? | Used for tracking? |
-|---|---|---|---|
-| Identifiers > Device ID (the advertising ID, IDFA) | Third-party advertising | No | Yes |
-| Usage Data > Advertising Data | Third-party advertising | No | Yes |
-| Usage Data > Product Interaction | Third-party advertising, analytics | No | Yes |
-| Location > Coarse Location (derived from the IP address) | Third-party advertising | No | Yes |
+**App Privacy ("nutrition label"):** answer **Data Not Collected** while the score server is off (no ads, no analytics, no tracking).
 
 If you deploy the score server and set `apiBase`, also declare the display name and random player ID that the leaderboard stores (Identifiers > User ID, Contact Info > Name, Gameplay Content) as collected for **App Functionality**, and add that to the privacy policy.
-The same data is declared inside the app in `ios/App/App/PrivacyInfo.xcprivacy` (Apple compares the two). Check both against Unity's current data-disclosure guidance for LevelPlay, Unity Ads and the ironSource network [CONFIRM].
+The same is declared inside the app in `ios/App/App/PrivacyInfo.xcprivacy` (no tracking, no collected data); Apple compares the two.
 
 **App Review notes** (paste into the review notes box):
 ```
-No sign-in is needed. Pizza Stack is a one-tap arcade game. On first launch the app shows a short privacy dialog (Accept / Decline) and then Apple's App Tracking Transparency prompt before any ad is requested. Declining either one does not limit the game. Rewarded videos are optional (the "watch ad" buttons). The app has no in-app purchases and no account system.
+No sign-in is needed. Pizza Stack is a one-tap arcade game. The app has no ads, no tracking, no in-app purchases and no account system.
 ```
 
 ## 4. Before the first upload [CONFIRM]
 - An **Apple Developer Program** membership (paid, yearly) for Pizza Technologies. The Team ID is on developer.apple.com > Membership details.
 - The **bundle id** `com.pizzatechnologies.pizzastack` registered at developer.apple.com > Identifiers, and an **app record** in App Store Connect (SKU: anything unique, e.g. `pizzastack-ios`).
-- A **LevelPlay iOS app**: in the LevelPlay dashboard add this game again for **iOS** (bundle id above). It gets its **own App Key and ad units**; paste them into `ads.levelplay.ios` in `www/js/config.js`. Until you do, the iOS app shows the sponsor card for "watch to earn" and nothing earns.
 - Developer / company name exactly as registered.

@@ -19,7 +19,10 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npm test
-      - run: node --check www/js/game.js && node --check www/js/ui.js
+      - run: for f in www/js/*.js; do node --check "$f"; done
+      - name: No ad code or ad SDKs in the app
+        run: |
+          ! grep -rniE 'levelplay|ironsource|unityads|adsbygoogle|googlesyndication|admob|NSUserTrackingUsageDescription|SKAdNetwork' www android/app/src android/app/*.gradle android/*.gradle ios/App/App ios/App/Podfile package.json
 
   android:
     needs: test
@@ -51,21 +54,12 @@ jobs:
         id: sign
         env: { KS: '${{ secrets.ANDROID_KEYSTORE_BASE64 }}' }
         run: echo "have=$([ -n "$KS" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-      # Release builds (official or throwaway-key check) ship PRODUCTION ad settings: LevelPlay test mode OFF, so the
-      # in-app test tools (Ad test suite, device ad id) are hidden and real ads are requested. The debug APK above keeps test mode ON.
-      - name: Switch to production config (ads test mode OFF) for release builds
-        run: |
-          sed -i "s/testMode: true,/testMode: false,/" www/js/config.js
-          grep -q "testMode: false," www/js/config.js || { echo "testMode was not switched off"; exit 1; }
-          grep -n "testMode" www/js/config.js
-          npx cap sync android
-
       - name: Build signed release APK + AAB
         if: steps.sign.outputs.have == 'true'
         working-directory: android
         env:
           VERSION_CODE: '${{ github.run_number }}'
-          VERSION_NAME: '1.0.${{ github.run_number }}'
+          VERSION_NAME: '1.1.${{ github.run_number }}'
           ANDROID_KEYSTORE_PASSWORD: '${{ secrets.ANDROID_KEYSTORE_PASSWORD }}'
           ANDROID_KEY_ALIAS: '${{ secrets.ANDROID_KEY_ALIAS }}'
           ANDROID_KEY_PASSWORD: '${{ secrets.ANDROID_KEY_PASSWORD }}'
@@ -114,7 +108,7 @@ jobs:
     runs-on: macos-26
     env:
       BUNDLE_ID: com.pizzatechnologies.pizzastack
-      APP_VERSION: ${{ vars.IOS_VERSION || '1.0.0' }}     # repository variable IOS_VERSION overrides it (must go UP with each App Store release)
+      APP_VERSION: ${{ vars.IOS_VERSION || '1.1.0' }}     # repository variable IOS_VERSION overrides it (must go UP with each App Store release)
       BUILD_NUMBER: ${{ github.run_number }}              # must go up with every upload to App Store Connect
     steps:
       - uses: actions/checkout@v4
@@ -126,9 +120,9 @@ jobs:
       - name: Sync web assets, plugins and CocoaPods
         run: npx cap sync ios
       - name: Resolved pod versions
-        run: grep -E "^  - (Capacitor|IronSource|UnityAds)" ios/App/Podfile.lock || true
+        run: grep -E "^  - Capacitor" ios/App/Podfile.lock || true
 
-      # Always produce an installable-after-re-signing build: an UNSIGNED device IPA (ads test mode ON, like the debug APK).
+      # Always produce an installable-after-re-signing build: an UNSIGNED device IPA.
       # It cannot be installed as is. Sideload it with Sideloadly / AltStore (free Apple ID, 7-day certificate) or sign it with your own certificate.
       - name: Build unsigned device IPA
         shell: bash
@@ -168,14 +162,6 @@ jobs:
           echo "have=$HAVE" >> "$GITHUB_OUTPUT"
           echo "upload=$UPLOAD" >> "$GITHUB_OUTPUT"
           if [ "$HAVE" != true ]; then echo "::notice title=iOS signing::No Apple signing secrets are set, so only the UNSIGNED test IPA was built. See the iOS section of README.md to get the App Store build."; fi
-      # The release ships PRODUCTION ad settings (LevelPlay test mode OFF), exactly like the Android release.
-      - name: Switch to production config (ads test mode OFF)
-        if: steps.sign.outputs.have == 'true'
-        run: |
-          sed -i '' "s/testMode: true,/testMode: false,/" www/js/config.js
-          grep -q "testMode: false," www/js/config.js || { echo "testMode was not switched off"; exit 1; }
-          grep -n "testMode" www/js/config.js
-          npx cap sync ios
       - name: Install certificate and provisioning profile
         if: steps.sign.outputs.have == 'true'
         shell: bash

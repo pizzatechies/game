@@ -2,7 +2,7 @@
   "name": "pizza-stack",
   "productName": "Pizza Stack",
   "version": "1.0.0",
-  "description": "Pizza Stack - an addictive stacking arcade game by Pizza Technologies",
+  "description": "Pizza Stack - an ad-free stacking arcade game by Pizza Technologies",
   "author": {
     "name": "Pizza Technologies",
     "email": "support@pizzatechnologies.com"
@@ -22,15 +22,13 @@
     "android:release": "cap sync android && cd android && ./gradlew assembleRelease bundleRelease",
     "dist:win": "electron-builder --win --publish never",
     "dist:linux": "electron-builder --linux --publish never",
-    "dist:mac": "electron-builder --mac --publish never",
-    "capacitor:sync:after": "node node_modules/capacitor-levelplay-ads/scripts/levelplay-manifest.js"
+    "dist:mac": "electron-builder --mac --publish never"
   },
   "devDependencies": {
     "@capacitor/android": "^8.5.3",
     "@capacitor/cli": "^8.5.3",
     "@capacitor/core": "^8.5.3",
     "@capacitor/ios": "^8.5.3",
-    "capacitor-levelplay-ads": "^0.1.42",
     "electron": "^44.7.0",
     "electron-builder": "^26.15.3"
   },
@@ -38,7 +36,7 @@
   "build": {
     "appId": "com.pizzatechnologies.pizzastack",
     "productName": "Pizza Stack",
-    "copyright": "Copyright © Pizza Technologies",
+    "copyright": "Copyright \u00a9 Pizza Technologies",
     "files": [
       "electron/**",
       "www/**",
@@ -76,12 +74,5 @@
       "category": "public.app-category.games",
       "icon": "build/icon.png"
     }
-  },
-  "levelplay": {
-    "networks": [
-      "unityads"
-    ],
-    "consentProvider": "custom",
-    "userTrackingDescription": "Pizza Stack uses your device's advertising identifier to show you more relevant ads and to measure them. You can say no and still play for free."
   }
 }

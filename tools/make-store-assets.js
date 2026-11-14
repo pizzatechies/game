@@ -28,7 +28,7 @@ function save({ skin, skins, daily, missions }) {
   return {
     v: 1, id: 'store-assets-demo-0001', name: 'Pizzaiolo', best: 96, coins: 1280, totalCoins: 5400, games: 42, perfects: 640, bestCombo: 14, bestHeight: 60,
     skin, skins, up: { dough: 2, coin: 1, perfect: 1 }, settings: { sound: true, music: true, vibe: true },
-    daily, missions, adsRemoved: false, pass: false, scoreQueue: [], lbCache: null, gamesSinceAd: 0, tutorialDone: true, claimed: {}
+    daily, missions, pass: false, scoreQueue: [], lbCache: null, tutorialDone: true, claimed: {}
   };
 }
 const mission = (type, text, goal, reward, progress, done) => ({ type, text, goal, reward, progress, done, claimed: false });

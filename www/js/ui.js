@@ -1,21 +1,20 @@
-/* Pizza Stack - UI controller: screens, shop, missions, leaderboard, settings, ad flow. */
+/* Pizza Stack - UI controller: screens, shop, missions, leaderboard, settings. No ads anywhere. */
 (function () {
   const PT = window.PT, cfg = PT.config, store = PT.store, $ = (s, r) => (r || document).querySelector(s), $$ = (s, r) => [...(r || document).querySelectorAll(s)];
   let run = null;              // per-run bookkeeping so revives don't double count
   let screen = 'splash';
   let installPrompt = null;
-  const REWARD_COINS = 60;     // "watch to earn" in the shop
+  const native = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
+  const electron = /Electron/i.test(navigator.userAgent);
 
   const el = {};
   ['stage', 'cv', 'hud', 'score', 'runCoins', 'combo', 'comboFill', 'hint', 'title', 'over', 'modal', 'mTitle', 'mBody', 'pauseOv', 'toast', 'splash', 'netPill', 'tBest', 'tCoins', 'badgeM',
-    'oScore', 'oBest', 'oLayers', 'oPerf', 'oCoins', 'newBest', 'unlockFill', 'unlockTxt', 'btnRevive', 'btnDouble', 'gutterBoard', 'haLink'].forEach(id => el[id] = document.getElementById(id));
+    'oScore', 'oBest', 'oLayers', 'oPerf', 'oCoins', 'newBest', 'unlockFill', 'unlockTxt', 'gutterBoard'].forEach(id => el[id] = document.getElementById(id));
 
   /* ---------- helpers ---------- */
   let toastT;
   function toast(msg) { el.toast.textContent = msg; el.toast.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.toast.classList.remove('show'), 2400); }
   PT.bus.on('toast', toast);
-  PT.bus.on('ads-wait', on => document.getElementById('adWait').classList.toggle('show', !!on));
-  document.getElementById('btnAdCancel').onclick = () => { click(); PT.ads.cancelWait(); };
   const fmt = n => n.toLocaleString('en-US');
   const click = () => PT.audio.click();
   function show(name) {
@@ -55,11 +54,10 @@
   }
 
   /* ---------- game flow ---------- */
-  async function startRun() {
+  function startRun() {
     click();
-    await PT.ads.maybeInterstitial();
     const st = store.get();
-    run = { banked: 0, perfects: 0, counted: false, doubled: false };
+    run = { banked: 0, perfects: 0, counted: false };
     PT.game.start(false);
     show('play');
     el.score.textContent = '0'; el.runCoins.querySelector('span').textContent = '0';
@@ -136,8 +134,6 @@
     el.oScore.textContent = r.score; el.oBest.textContent = st.best; el.oLayers.textContent = r.layers; el.oPerf.textContent = r.perfects;
     el.oCoins.textContent = '+' + r.coins;
     el.newBest.classList.toggle('hidden', !newBest || r.score < 3);
-    el.btnRevive.classList.toggle('hidden', r.revived || r.score < 4);
-    el.btnDouble.classList.toggle('hidden', run.doubled || r.coins < 5);
     // next unlock progress
     const next = PT.game.SKINS.filter(s => !st.skins.includes(s.id) && s.id !== 'golden').sort((a, b) => a.price - b.price)[0];
     if (next) { const pct = Math.min(100, st.coins / next.price * 100); el.unlockFill.style.width = pct + '%'; el.unlockTxt.textContent = `${next.name.toUpperCase()}  ${fmt(Math.min(st.coins, next.price))}/${fmt(next.price)}`; el.unlockBar.style.display = ''; }
@@ -152,16 +148,6 @@
   $('#btnHome').onclick = goHome;
   $('#btnPlay').onclick = startRun;
   $('#btnShopO').onclick = () => { click(); openModal('shop'); };
-  $('#btnRevive').onclick = async () => {
-    click();
-    const ok = await PT.ads.showRewarded('Continue your stack');
-    if (ok && PT.game.revive()) { PT.audio.setMuffle(false); show('play'); el.combo.classList.remove('on', 'fever'); toast('Back in the kitchen!'); } else if (!ok) toast('Watch the full video to continue');
-  };
-  $('#btnDouble').onclick = async () => {
-    click();
-    const ok = await PT.ads.showRewarded('Double your coins');
-    if (ok && over && !run.doubled) { run.doubled = true; store.addCoins(over.r.coins); el.oCoins.textContent = '+' + over.r.coins * 2; el.btnDouble.classList.add('hidden'); PT.audio.coin(); toast('Coins doubled!'); refreshTitle(); }
-  };
   $('#btnShare').onclick = async () => {
     click();
     const r = over ? over.r.score : store.get().best;
@@ -191,20 +177,17 @@
     if (storeAvailable()) list.push(['buy', 'Store']);
     list.forEach(([id, label]) => { const t = mk('button', 'tab' + (shopTab === id ? ' on' : ''), label); t.onclick = () => { click(); shopTab = id; renderShop(); }; tabs.appendChild(t); });
     body.appendChild(tabs);
-    const wallet = mk('div', 'row', `<i class="coin"></i><div class="grow"><b>${fmt(st.coins)} coins</b><small>Earn coins every run</small></div>`);
-    const free = mk('button', 'btn sm ad', `+${REWARD_COINS} <i class="coin" style="width:16px;height:16px"></i> <small>watch ad</small>`);
-    free.onclick = async () => { click(); if (await PT.ads.showRewarded('Free coins')) { store.addCoins(REWARD_COINS); PT.audio.coin(); toast(`+${REWARD_COINS} coins!`); renderShop(); } };
-    wallet.appendChild(free); body.appendChild(wallet);
+    body.appendChild(mk('div', 'row', `<i class="coin"></i><div class="grow"><b>${fmt(st.coins)} coins</b><small>Earn coins every run, from missions and daily rewards</small></div>`));
 
     if (shopTab === 'skins') {
       const grid = mk('div', 'grid');
       PT.game.SKINS.forEach(s => {
         const owned = st.skins.includes(s.id), sel = st.skin === s.id;
         const card = mk('div', 'item' + (sel ? ' sel' : '')); const cv = mk('canvas'); card.appendChild(cv); card.appendChild(mk('b', '', s.name));
-        const b = mk('button', 'btn sm' + (owned ? '' : ' gold'), sel ? 'EQUIPPED' : owned ? 'EQUIP' : (s.id === 'golden' && !st.pass ? `${fmt(s.price)} <i class="coin" style="width:16px;height:16px"></i>` : `${fmt(s.price)} <i class="coin" style="width:16px;height:16px"></i>`));
+        const b = mk('button', 'btn sm' + (owned ? '' : ' gold'), sel ? 'EQUIPPED' : owned ? 'EQUIP' : `${fmt(s.price)} <i class="coin" style="width:16px;height:16px"></i>`);
         if (sel) b.disabled = true;
         b.onclick = () => {
-          if (!owned) { if (!store.spend(s.price)) { toast('Not enough coins - play or watch an ad!'); return; } st.skins.push(s.id); PT.audio.coin(); }
+          if (!owned) { if (!store.spend(s.price)) { toast('Not enough coins - keep stacking!'); return; } st.skins.push(s.id); PT.audio.coin(); }
           st.skin = s.id; store.save(); click(); renderShop();
         };
         card.appendChild(b); grid.appendChild(card);
@@ -223,11 +206,11 @@
       });
     } else renderBuy(body);
   }
-  const storeAvailable = () => !PT.ads.native && Object.values(cfg.store).some(i => i.url);
+  const storeAvailable = () => !native && Object.values(cfg.store).some(i => i.url);
   function renderBuy(body) {
     const st = store.get();
     Object.entries(cfg.store).forEach(([k, it]) => {
-      const owned = (k === 'removeAds' && (st.adsRemoved || st.pass)) || (k === 'pizzaPass' && st.pass);
+      const owned = k === 'pizzaPass' && st.pass;
       const row = mk('div', 'row'); row.appendChild(mk('div', 'grow', `<b>${it.title}</b><small>${it.desc}</small>`));
       const b = mk('button', 'btn sm gold', owned ? 'OWNED' : it.price); b.disabled = owned || !it.url;
       b.onclick = () => { click(); const u = it.url + (it.url.includes('?') ? '&' : '?') + 'client_reference_id=' + encodeURIComponent(st.id); window.open(u, '_blank', 'noopener'); toast('Complete checkout, then return here'); };
@@ -250,9 +233,7 @@
     body.appendChild(days);
     if (d.can) {
       const b = mk('button', 'btn gold', `CLAIM ${store.DAILY[d.index]} COINS`); b.onclick = () => { const a = store.claimDaily(1); PT.audio.coin(); toast(`+${a} coins! Streak: ${st.daily.streak} day(s)`); renderMissions(); };
-      const b2 = mk('button', 'btn ad', `CLAIM x2 <small>watch ad</small>`); b2.style.marginTop = '10px';
-      b2.onclick = async () => { if (await PT.ads.showRewarded('Double daily reward')) { const a = store.claimDaily(2); PT.audio.coin(); toast(`+${a} coins!`); renderMissions(); } };
-      body.appendChild(b); body.appendChild(b2);
+      body.appendChild(b);
     } else body.appendChild(mk('div', 'note', 'Come back tomorrow to keep your streak alive!'));
     body.appendChild(mk('div', 'note', 'TODAY\'S MISSIONS'));
     st.missions.list.forEach((m, i) => {
@@ -289,13 +270,6 @@
     body.appendChild(mk('div', 'note', 'LEADERBOARD NAME'));
     const inp = mk('input', 'txt'); inp.maxLength = 16; inp.value = st.name; inp.addEventListener('change', () => { const v = inp.value.replace(/[<>]/g, '').trim().slice(0, 16); st.name = v || st.name; inp.value = st.name; store.save(); });
     inp.addEventListener('keydown', e => e.stopPropagation()); body.appendChild(inp);
-    const adst = PT.ads.status(); if (adst) { const n = mk('div', 'note'); n.textContent = 'Ad status: ' + adst.text; n.style.userSelect = 'text'; body.appendChild(n); }
-    if (adst && cfg.ads.testMode) {                         // test builds only: tools for setting up ads in the LevelPlay dashboard
-      const ts = mk('button', 'btn ghost', 'Open ad test suite'); ts.onclick = () => { click(); PT.ads.launchTestSuite(); }; body.appendChild(ts);
-      const idn = mk('div', 'note'); idn.style.userSelect = 'text'; idn.textContent = 'Device ad ID (for LevelPlay test devices): …'; body.appendChild(idn);
-      PT.ads.deviceAdId().then(id => { idn.textContent = 'Device ad ID (for LevelPlay test devices): ' + (id || 'not available yet'); });
-    }
-    if (PT.ads.hasPrivacyOptions()) { const b = mk('button', 'btn ghost', 'Ad &amp; privacy choices'); b.onclick = () => { click(); PT.ads.showPrivacyOptions(); }; body.appendChild(b); }
     if (installPrompt) { const b = mk('button', 'btn ghost', 'Install on this device'); b.onclick = async () => { installPrompt.prompt(); installPrompt = null; closeModal(); }; body.appendChild(b); }
     const a = mk('div', 'about', `<img src="img/pt-logo.png" alt="Pizza Technologies logo"><p class="note">Pizza Stack v${cfg.version}<br>A game by <b>${cfg.studio}</b><br><a class="lnk" href="${cfg.privacyUrl}" target="_blank" rel="noopener">Privacy Policy</a> &middot; <a class="lnk" href="mailto:${cfg.supportEmail}">Support</a></p><p class="note" style="font-size:11px">Player ID: ${st.id.slice(0, 8)}</p>`);
     body.appendChild(a);
@@ -306,12 +280,11 @@
   function boot() {
     store.load(); store.ensureMissions();
     document.getElementById('yr').textContent = new Date().getFullYear();
-    el.haLink.href = cfg.studioUrl;
     PT.game.init(el.cv, el.stage);
-    PT.ads.init(); PT.net.ping();
+    PT.net.ping();
     setNet(false);
     refreshTitle();
-    if (!PT.ads.native && !PT.ads.electron && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => { });
+    if (!native && !electron && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => { });
     let done = false, stage = 1;
     const toGameSplash = () => { if (done || stage !== 1) return; stage = 2; el.splash.classList.add('stage2'); };
     const finish = () => {

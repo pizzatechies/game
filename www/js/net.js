@@ -11,7 +11,7 @@
     const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 6000);
     try {
       const r = await fetch(base() + path, Object.assign({ signal: ctl.signal, headers: { 'Content-Type': 'application/json' } }, opts));
-      if (!r.ok) throw new Error('HTTP ' + r.status);
+      if (!r.ok) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
       return await r.json();
     } finally { clearTimeout(to); }
   }
@@ -42,7 +42,8 @@
     try {
       while (st.scoreQueue.length) {
         const q = st.scoreQueue[0];
-        await req('/api/score', { method: 'POST', body: JSON.stringify({ id: st.id, name: st.name, game: cfg.game, version: cfg.version, ...q }) });
+        try { await req('/api/score', { method: 'POST', body: JSON.stringify({ id: st.id, name: st.name, game: cfg.game, version: cfg.version, ...q }) }); }
+        catch (e) { if (!(e.status >= 400 && e.status < 500 && e.status !== 429)) throw e; }   // rejected for good (e.g. implausible): drop it so it never blocks the queue
         st.scoreQueue.shift(); PT.store.save(); serverOk = true;
       }
     } catch (e) { serverOk = false; }
@@ -71,7 +72,6 @@
     try {
       const e = await req('/api/entitlements/' + encodeURIComponent(st.id));
       let changed = false;
-      if (e.adsRemoved && !st.adsRemoved) { st.adsRemoved = true; changed = true; }
       if (e.pass && !st.pass) { st.pass = true; changed = true; if (!st.skins.includes('golden')) st.skins.push('golden'); }
       const delta = (e.coinCredits || 0) - (st.claimed.coins || 0);
       if (delta > 0) { st.claimed.coins = e.coinCredits; PT.store.addCoins(delta); PT.bus.emit('toast', `+${delta} coins from your purchase!`); changed = true; }
